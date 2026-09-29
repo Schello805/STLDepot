@@ -264,7 +264,27 @@ export default function ModelCard({
             {formatFileSize(model.total_file_size)}
           </span>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit(model);
+              }}
+              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
+              title="Bearbeiten"
+            >
+              <MoreVertical className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(model);
+              }}
+              className="p-1.5 rounded-lg bg-slate-800 hover:bg-red-950 text-slate-400 hover:text-red-400 transition"
+              title="Löschen"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
             <button
               onClick={handleDownload}
               disabled={downloading}

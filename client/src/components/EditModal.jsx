@@ -1,10 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   X, 
   Edit3, 
   Check, 
   AlertCircle,
-  Trash2
+  Trash2,
+  FileBox,
+  Plus,
+  Layers,
+  Upload
 } from 'lucide-react';
 
 export default function EditModal({ model, onClose, onUpdated }) {
@@ -24,8 +28,11 @@ export default function EditModal({ model, onClose, onUpdated }) {
   const [notes, setNotes] = useState(model.notes || '');
   const [tagInput, setTagInput] = useState('');
   const [tags, setTags] = useState(model.tags || []);
+  const [files, setFiles] = useState(model.files || []);
+  const [newFiles, setNewFiles] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const extraFileInputRef = useRef(null);
 
   const categories = [
     'Deko & Haushalt',
@@ -59,6 +66,28 @@ export default function EditModal({ model, onClose, onUpdated }) {
     setTags(tags.filter(t => t !== tagToRemove));
   };
 
+  const handleDeleteExistingFile = async (fileId) => {
+    if (files.length <= 1) {
+      alert('Ein Modell muss mindestens eine Datei behalten. Lösche stattdessen das gesamte Modell.');
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/models/${model.id}/files/${fileId}`, { method: 'DELETE' });
+      if (res.ok) {
+        setFiles(prev => prev.filter(f => f.id !== fileId));
+      }
+    } catch (err) {
+      console.error('Failed to delete file:', err);
+    }
+  };
+
+  const handleUploadExtraFiles = (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setNewFiles(prev => [...prev, ...Array.from(e.target.files)]);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!title.trim()) {
@@ -70,6 +99,7 @@ export default function EditModal({ model, onClose, onUpdated }) {
     setError(null);
 
     try {
+      // 1. Update project metadata
       const res = await fetch(`/api/models/${model.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -95,6 +125,18 @@ export default function EditModal({ model, onClose, onUpdated }) {
         throw new Error(data.error || 'Aktualisierung fehlgeschlagen');
       }
 
+      // 2. Upload any newly added files if selected
+      if (newFiles.length > 0) {
+        const formData = new FormData();
+        for (const file of newFiles) {
+          formData.append('files', file);
+        }
+        await fetch(`/api/models/${model.id}/files`, {
+          method: 'POST',
+          body: formData
+        });
+      }
+
       onUpdated();
       onClose();
     } catch (err) {
@@ -117,7 +159,7 @@ export default function EditModal({ model, onClose, onUpdated }) {
               <Edit3 className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-slate-100">Modell-Metadaten bearbeiten</h2>
+              <h2 className="text-lg font-bold text-slate-100">Modell-Metadaten & Dateien bearbeiten</h2>
               <p className="text-xs text-slate-400">{model.title}</p>
             </div>
           </div>
@@ -138,6 +180,68 @@ export default function EditModal({ model, onClose, onUpdated }) {
               <span>{error}</span>
             </div>
           )}
+
+          {/* Files Management in Edit Mode */}
+          <div className="p-4 bg-slate-950/60 rounded-2xl border border-slate-800 space-y-3">
+            <div className="flex items-center justify-between text-xs font-semibold text-slate-300">
+              <span className="flex items-center gap-1.5">
+                <Layers className="w-4 h-4 text-cyan-400" />
+                Zugeordnete Modelldateien ({files.length + newFiles.length})
+              </span>
+              <button
+                type="button"
+                onClick={() => extraFileInputRef.current?.click()}
+                className="flex items-center gap-1 text-cyan-400 hover:text-cyan-300 transition"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Dateien hinzufügen</span>
+              </button>
+              <input
+                ref={extraFileInputRef}
+                type="file"
+                multiple
+                accept=".stl,.3mf,.zip,.png,.jpg,.jpeg,.webp"
+                className="hidden"
+                onChange={handleUploadExtraFiles}
+              />
+            </div>
+
+            <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+              {files.map((f) => (
+                <div key={f.id} className="flex items-center justify-between p-2 px-3 bg-slate-900 rounded-xl border border-slate-800 text-xs">
+                  <div className="flex items-center gap-2 truncate">
+                    <FileBox className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                    <span className="text-slate-200 truncate">{f.original_name}</span>
+                    <span className="text-slate-500 font-mono text-[10px]">({(f.file_size / 1024).toFixed(0)} KB)</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteExistingFile(f.id)}
+                    className="text-slate-500 hover:text-red-400 transition ml-2"
+                    title="Datei aus Modell entfernen"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+
+              {newFiles.map((nf, idx) => (
+                <div key={idx} className="flex items-center justify-between p-2 px-3 bg-cyan-950/30 rounded-xl border border-cyan-800/60 text-xs">
+                  <div className="flex items-center gap-2 truncate">
+                    <Upload className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                    <span className="text-cyan-200 truncate">{nf.name} (Neu)</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setNewFiles(prev => prev.filter((_, i) => i !== idx))}
+                    className="text-slate-400 hover:text-red-400 transition ml-2"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             
