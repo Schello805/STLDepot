@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Navbar from './components/Navbar';
 import ModelCard from './components/ModelCard';
 import ViewerModal from './components/ViewerModal';
@@ -18,7 +18,8 @@ import {
   Filter, 
   SlidersHorizontal,
   RefreshCw,
-  HardDrive
+  HardDrive,
+  UploadCloud
 } from 'lucide-react';
 
 export default function App() {
@@ -43,6 +44,10 @@ export default function App() {
   const [activeEditModel, setActiveEditModel] = useState(null);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+
+  // Drag over window state
+  const [isWindowDragOver, setIsWindowDragOver] = useState(false);
+  const dragCounterRef = useRef(0);
 
   // Fetch System Info & Dynamic Revision
   const fetchSystemInfo = useCallback(async () => {
@@ -108,6 +113,45 @@ export default function App() {
     return () => clearTimeout(timeout);
   }, [fetchModels]);
 
+  // Global Keyboard Shortcuts (Escape closes modals)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setActiveViewerModel(null);
+        setActiveSlicerModel(null);
+        setActiveEditModel(null);
+        setIsUploadOpen(false);
+        setIsScannerOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Window-wide Drag & Drop handling
+  const handleDragEnter = (e) => {
+    e.preventDefault();
+    dragCounterRef.current += 1;
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setIsWindowDragOver(true);
+    }
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    dragCounterRef.current -= 1;
+    if (dragCounterRef.current <= 0) {
+      setIsWindowDragOver(false);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    dragCounterRef.current = 0;
+    setIsWindowDragOver(false);
+    setIsUploadOpen(true);
+  };
+
   const handleToggleFavorite = async (model) => {
     try {
       const newFavStatus = !model.is_favorite;
@@ -146,8 +190,25 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col bg-grid-pattern selection:bg-cyan-500 selection:text-slate-950">
+    <div 
+      className="min-h-screen bg-slate-950 text-slate-100 flex flex-col bg-grid-pattern selection:bg-cyan-500 selection:text-slate-950"
+      onDragEnter={handleDragEnter}
+      onDragOver={(e) => e.preventDefault()}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       
+      {/* Full-screen Drag Overlay */}
+      {isWindowDragOver && (
+        <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md border-4 border-dashed border-cyan-500 flex flex-col items-center justify-center p-8 pointer-events-none animate-in fade-in duration-150">
+          <div className="w-20 h-20 rounded-3xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center mb-4 animate-bounce">
+            <UploadCloud className="w-10 h-10" />
+          </div>
+          <h2 className="text-2xl font-black text-white">3D-Dateien hier ablegen!</h2>
+          <p className="text-sm text-cyan-300 mt-1">Öffnet den Upload-Dialog mit automatischer 3D-Vorschau</p>
+        </div>
+      )}
+
       {/* Sticky Header Navbar */}
       <Navbar
         searchQuery={searchQuery}
