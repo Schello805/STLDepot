@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import * as THREE from 'three';
 import { 
   X, 
   UploadCloud, 
@@ -16,10 +17,18 @@ import {
   ChevronUp,
   Files,
   FolderArchive,
+  RotateCw,
+  Box,
   RefreshCw,
-  Box
+  Maximize2
 } from 'lucide-react';
-import { parseSTL, parse3MF, analyzeGeometry, generateThumbnailSnapshot } from '../utils/threeUtils';
+import { 
+  parseSTL, 
+  parse3MF, 
+  centerAndAlignGeometry, 
+  analyzeGeometry, 
+  generateThumbnailSnapshot 
+} from '../utils/threeUtils';
 import confetti from 'canvas-confetti';
 
 export default function UploadModal({ onClose, onUploadSuccess }) {
@@ -47,11 +56,22 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
   const [tagInput, setTagInput] = useState('');
   const [tags, setTags] = useState([]);
 
-  // Preview & Loading States
-  const [thumbnailDataUrl, setThumbnailDataUrl] = useState(null);
-  const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
+  // Interactive 3D Canvas States
+  const canvasContainerRef = useRef(null);
+  const sceneRef = useRef(null);
+  const rendererRef = useRef(null);
+  const cameraRef = useRef(null);
+  const meshRef = useRef(null);
+  const animFrameRef = useRef(null);
+  const targetLookAtRef = useRef(new THREE.Vector3(0, 10, 0));
+  const isDraggingRef = useRef(false);
+  const isPanningRef = useRef(false);
+  const prevMouseRef = useRef({ x: 0, y: 0 });
+
+  const [isParsing3D, setIsParsing3D] = useState(false);
   const [previewStats, setPreviewStats] = useState(null);
   const [currentGeometry, setCurrentGeometry] = useState(null);
+  const [autoRotate, setAutoRotate] = useState(false);
 
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -71,8 +91,76 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
 
   const filamentOptions = ['PLA', 'PETG', 'ABS', 'ASA', 'TPU / Flex', 'PCTG', 'Nylon / PA', 'PC', 'Resin'];
 
-  const process3DPreview = async (file, color) => {
-    setIsGeneratingPreview(true);
+  // Initialize Three.js interactive canvas in modal
+  useEffect(() => {
+    if (!canvasContainerRef.current) return;
+
+    const container = canvasContainerRef.current;
+    const width = container.clientWidth || 500;
+    const height = container.clientHeight || 260;
+
+    const scene = new THREE.Scene();
+    sceneRef.current = scene;
+
+    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 2000);
+    camera.position.set(90, 80, 110);
+    camera.lookAt(targetLookAtRef.current);
+    cameraRef.current = camera;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    container.innerHTML = '';
+    container.appendChild(renderer.domElement);
+    rendererRef.current = renderer;
+
+    // Lights
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+    scene.add(ambientLight);
+
+    const dirLight1 = new THREE.DirectionalLight(0xffffff, 1.3);
+    dirLight1.position.set(150, 200, 150);
+    scene.add(dirLight1);
+
+    const dirLight2 = new THREE.DirectionalLight(0x38bdf8, 0.5);
+    dirLight2.position.set(-150, 100, -150);
+    scene.add(dirLight2);
+
+    // Bed Grid
+    const grid = new THREE.GridHelper(220, 22, 0x06b6d4, 0x334155);
+    grid.position.y = 0;
+    scene.add(grid);
+
+    const animate = () => {
+      animFrameRef.current = requestAnimationFrame(animate);
+      if (autoRotate && meshRef.current) {
+        meshRef.current.rotation.y += 0.012;
+      }
+      renderer.render(scene, camera);
+    };
+    animate();
+
+    const handleResize = () => {
+      if (!container || !renderer || !camera) return;
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    };
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (renderer) renderer.dispose();
+    };
+  }, [files.length > 0]);
+
+  // Load geometry into Three.js canvas
+  const load3DFileIntoCanvas = async (file) => {
+    setIsParsing3D(true);
     setError(null);
     try {
       const buffer = await file.arrayBuffer();
@@ -83,19 +171,45 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
         geom = parseSTL(buffer);
       }
 
-      setCurrentGeometry(geom);
+      centerAndAlignGeometry(geom);
       const stats = analyzeGeometry(geom);
       setPreviewStats(stats);
+      setCurrentGeometry(geom);
 
-      const thumbUrl = await generateThumbnailSnapshot(geom, color, 600, 450);
-      if (thumbUrl) {
-        setThumbnailDataUrl(thumbUrl);
+      if (sceneRef.current) {
+        if (meshRef.current) {
+          sceneRef.current.remove(meshRef.current);
+          meshRef.current.geometry.dispose();
+          meshRef.current.material.dispose();
+        }
+
+        const material = new THREE.MeshStandardMaterial({
+          color: new THREE.Color(filamentColor),
+          metalness: 0.2,
+          roughness: 0.45
+        });
+        const mesh = new THREE.Mesh(geom, material);
+        sceneRef.current.add(mesh);
+        meshRef.current = mesh;
+
+        // Auto position camera
+        const bbox = geom.boundingBox;
+        const size = new THREE.Vector3();
+        bbox.getSize(size);
+        const maxDim = Math.max(size.x, size.y, size.z, 20);
+        const dist = maxDim * 2.2;
+        targetLookAtRef.current.set(0, size.y / 2, 0);
+
+        if (cameraRef.current) {
+          cameraRef.current.position.set(dist * 0.9, dist * 0.8, dist * 1.1);
+          cameraRef.current.lookAt(targetLookAtRef.current);
+        }
       }
     } catch (err) {
-      console.warn('3D Preview generation note:', err);
-      // Don't fail the upload if preview fails, just log
+      console.error('Error loading 3D preview:', err);
+      setError(`3D-Vorschau Fehler: ${err.message || 'Datei konnte nicht gelesen werden'}`);
     } finally {
-      setIsGeneratingPreview(false);
+      setIsParsing3D(false);
     }
   };
 
@@ -105,35 +219,27 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
 
     setFiles(prev => [...prev, ...validFiles]);
 
-    // Automatically switch to batch mode if more than 1 file is selected
     if (validFiles.length > 1 || files.length + validFiles.length > 1) {
       setUploadMode('batch');
     }
 
-    // Auto set title from first file if empty
     if (!title && validFiles[0]) {
       const baseName = validFiles[0].name.replace(/\.[^/.]+$/, "");
       const formattedTitle = baseName.replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
       setTitle(formattedTitle);
     }
 
-    // Trigger preview generation with loading spinner
     const first3d = validFiles.find(f => f.name.toLowerCase().endsWith('.stl') || f.name.toLowerCase().endsWith('.3mf'));
     if (first3d) {
-      process3DPreview(first3d, filamentColor);
+      setTimeout(() => load3DFileIntoCanvas(first3d), 50);
     }
   };
 
-  // Re-render thumbnail when filament color changes
-  const handleColorChange = async (newColor) => {
+  // Update mesh color in real-time
+  const handleColorChange = (newColor) => {
     setFilamentColor(newColor);
-    if (currentGeometry) {
-      try {
-        const thumbUrl = await generateThumbnailSnapshot(currentGeometry, newColor, 600, 450);
-        if (thumbUrl) {
-          setThumbnailDataUrl(thumbUrl);
-        }
-      } catch (e) {}
+    if (meshRef.current) {
+      meshRef.current.material.color.set(newColor);
     }
   };
 
@@ -141,13 +247,99 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
     const remaining = files.filter((_, i) => i !== index);
     setFiles(remaining);
     if (remaining.length === 0) {
-      setThumbnailDataUrl(null);
       setPreviewStats(null);
       setCurrentGeometry(null);
       setUploadMode('single');
+      if (meshRef.current && sceneRef.current) {
+        sceneRef.current.remove(meshRef.current);
+        meshRef.current = null;
+      }
     } else if (remaining.length === 1) {
       setUploadMode('single');
     }
+  };
+
+  // Custom Mouse/Touch Orbit Controls
+  const handleMouseDown = (e) => {
+    if (e.button === 0) isDraggingRef.current = true;
+    if (e.button === 2 || e.shiftKey) isPanningRef.current = true;
+    prevMouseRef.current = { x: e.clientX, y: e.clientY };
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isDraggingRef.current && !isPanningRef.current) return;
+    if (!cameraRef.current) return;
+
+    const deltaX = e.clientX - prevMouseRef.current.x;
+    const deltaY = e.clientY - prevMouseRef.current.y;
+
+    if (isPanningRef.current) {
+      const factor = 0.2;
+      const right = new THREE.Vector3(1, 0, 0).applyQuaternion(cameraRef.current.quaternion);
+      const up = new THREE.Vector3(0, 1, 0).applyQuaternion(cameraRef.current.quaternion);
+      cameraRef.current.position.addScaledVector(right, -deltaX * factor);
+      cameraRef.current.position.addScaledVector(up, deltaY * factor);
+      targetLookAtRef.current.addScaledVector(right, -deltaX * factor);
+      targetLookAtRef.current.addScaledVector(up, deltaY * factor);
+      cameraRef.current.lookAt(targetLookAtRef.current);
+    } else if (isDraggingRef.current) {
+      const rotSpeed = 0.008;
+      const offset = cameraRef.current.position.clone().sub(targetLookAtRef.current);
+      let radius = offset.length();
+      let theta = Math.atan2(offset.x, offset.z);
+      let phi = Math.acos(Math.max(-1, Math.min(1, offset.y / radius)));
+
+      theta -= deltaX * rotSpeed;
+      phi -= deltaY * rotSpeed;
+      phi = Math.max(0.05, Math.min(Math.PI - 0.05, phi));
+
+      offset.x = radius * Math.sin(phi) * Math.sin(theta);
+      offset.y = radius * Math.cos(phi);
+      offset.z = radius * Math.sin(phi) * Math.cos(theta);
+
+      cameraRef.current.position.copy(targetLookAtRef.current).add(offset);
+      cameraRef.current.lookAt(targetLookAtRef.current);
+    }
+
+    prevMouseRef.current = { x: e.clientX, y: e.clientY };
+  };
+
+  const handleMouseUp = () => {
+    isDraggingRef.current = false;
+    isPanningRef.current = false;
+  };
+
+  const handleWheel = (e) => {
+    if (!cameraRef.current) return;
+    e.preventDefault();
+    const zoomFactor = e.deltaY > 0 ? 1.08 : 0.92;
+    const offset = cameraRef.current.position.clone().sub(targetLookAtRef.current);
+    offset.multiplyScalar(zoomFactor);
+    cameraRef.current.position.copy(targetLookAtRef.current).add(offset);
+  };
+
+  const setCameraView = (view) => {
+    if (!cameraRef.current || !meshRef.current) return;
+    const bbox = new THREE.Box3().setFromObject(meshRef.current);
+    const size = new THREE.Vector3();
+    bbox.getSize(size);
+    const maxDim = Math.max(size.x, size.y, size.z, 20);
+    const dist = maxDim * 2.2;
+    const center = targetLookAtRef.current;
+
+    switch (view) {
+      case 'top':
+        cameraRef.current.position.set(0, dist * 1.5, 0.001);
+        break;
+      case 'front':
+        cameraRef.current.position.set(0, center.y, dist * 1.5);
+        break;
+      case 'iso':
+      default:
+        cameraRef.current.position.set(dist * 0.9, dist * 0.8, dist * 1.1);
+        break;
+    }
+    cameraRef.current.lookAt(center);
   };
 
   const handleAddTag = () => {
@@ -180,6 +372,14 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
     setUploadProgress(10);
 
     try {
+      // Capture high-res snapshot from current 3D perspective
+      let thumbnailDataUrl = '';
+      if (rendererRef.current) {
+        thumbnailDataUrl = rendererRef.current.domElement.toDataURL('image/png');
+      } else if (currentGeometry) {
+        thumbnailDataUrl = await generateThumbnailSnapshot(currentGeometry, filamentColor, 600, 450);
+      }
+
       // BULK MODE: Upload files as individual models in chunks
       if (uploadMode === 'batch' && files.length > 1) {
         const CHUNK_SIZE = 25;
@@ -285,7 +485,7 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
             </div>
             <div>
               <h2 className="text-lg font-bold text-slate-100">3D-Modelle hinzufügen</h2>
-              <p className="text-xs text-slate-400">Einzelne Modelle, Baugruppen oder Massen-Upload</p>
+              <p className="text-xs text-slate-400">STL & 3MF Dateien mit interaktiver 3D-Vorschau</p>
             </div>
           </div>
           <button 
@@ -306,8 +506,18 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
             </div>
           )}
 
-          {/* Drag & Drop Zone */}
-          <div>
+          {/* HIDDEN FILE INPUT */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept=".stl,.3mf,.zip,.png,.jpg,.jpeg,.webp"
+            className="hidden"
+            onChange={(e) => handleFileChange(e.target.files)}
+          />
+
+          {/* 1. DROPZONE (ONLY SHOWN WHEN NO FILES SELECTED) */}
+          {files.length === 0 ? (
             <div
               onClick={() => fileInputRef.current?.click()}
               onDragOver={(e) => e.preventDefault()}
@@ -315,123 +525,134 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
                 e.preventDefault();
                 handleFileChange(e.dataTransfer.files);
               }}
-              className="border-2 border-dashed border-cyan-500/40 hover:border-cyan-400 rounded-2xl p-5 sm:p-6 flex flex-col items-center justify-center cursor-pointer bg-slate-950/60 hover:bg-slate-950/80 transition-all text-center group shadow-inner"
+              className="border-2 border-dashed border-cyan-500/40 hover:border-cyan-400 rounded-2xl p-8 sm:p-10 flex flex-col items-center justify-center cursor-pointer bg-slate-950/60 hover:bg-slate-950/80 transition-all text-center group shadow-inner"
             >
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                accept=".stl,.3mf,.zip,.png,.jpg,.jpeg,.webp"
-                className="hidden"
-                onChange={(e) => handleFileChange(e.target.files)}
-              />
-              <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-                <UploadCloud className="w-6 h-6" />
+              <div className="w-14 h-14 rounded-2xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                <UploadCloud className="w-7 h-7" />
               </div>
-              <p className="text-sm font-bold text-slate-100 group-hover:text-cyan-300 transition-colors">
+              <p className="text-base font-bold text-slate-100 group-hover:text-cyan-300 transition-colors">
                 Klicke hier oder ziehe STL- / 3MF-Dateien hinein
               </p>
-              <p className="text-[11px] text-slate-400 mt-0.5">
-                Einzelteile, Baugruppen oder dutzende Dateien gleichzeitig
+              <p className="text-xs text-slate-400 mt-1 max-w-md">
+                Unterstützt STL & 3MF (inkl. Bambu Studio, OrcaSlicer, PrusaSlicer)
               </p>
             </div>
-
-            {/* Multiple files mode selector */}
-            {files.length > 1 && (
-              <div className="mt-3 p-3 bg-slate-950/70 rounded-2xl border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
-                <div className="flex items-center gap-2 text-xs text-slate-300">
-                  <Files className="w-4 h-4 text-cyan-400" />
-                  <span><strong>{files.length} Dateien</strong> ausgewählt</span>
+          ) : (
+            /* 2. REPLACED BY INTERACTIVE 3D PREVIEW & FILE BAR ONCE FILES ARE SELECTED */
+            <div className="space-y-3">
+              
+              {/* Selected File Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 px-3.5 bg-slate-950/80 rounded-2xl border border-slate-800 text-xs">
+                <div className="flex items-center gap-2 truncate">
+                  <FileBox className="w-4 h-4 text-cyan-400 shrink-0" />
+                  <span className="text-slate-100 font-semibold truncate">{files[0].name}</span>
+                  <span className="text-slate-500 font-mono text-[10px]">({(files[0].size / 1024).toFixed(0)} KB)</span>
+                  {files.length > 1 && (
+                    <span className="px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 text-[10px] font-bold">
+                      +{files.length - 1} weitere
+                    </span>
+                  )}
                 </div>
-                <div className="flex items-center gap-2 w-full sm:w-auto">
+
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setUploadMode('batch')}
-                    className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-xl text-xs font-semibold transition border ${
-                      uploadMode === 'batch'
-                        ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300 shadow-sm'
-                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
-                    }`}
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition text-xs"
                   >
-                    ⚡ Massen-Upload (jede Datei einzeln)
+                    <Plus className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Andere Datei</span>
                   </button>
                   <button
                     type="button"
-                    onClick={() => setUploadMode('assembly')}
-                    className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-xl text-xs font-semibold transition border ${
-                      uploadMode === 'assembly'
-                        ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300 shadow-sm'
-                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
-                    }`}
+                    onClick={() => removeFile(0)}
+                    className="p-1 rounded-lg bg-slate-800 hover:bg-red-950 text-slate-400 hover:text-red-400 transition"
+                    title="Datei entfernen"
                   >
-                    📦 Baugruppe (1 Projekt)
+                    <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
-            )}
 
-            {/* Selected Files List preview */}
-            {files.length > 0 && (
-              <div className="mt-3 max-h-28 overflow-y-auto space-y-1.5 pr-1">
-                {files.slice(0, 10).map((file, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-2 px-3 bg-slate-950/50 rounded-xl border border-slate-800/80 text-xs">
-                    <div className="flex items-center gap-2 truncate">
-                      <FileBox className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                      <span className="text-slate-200 truncate">{file.name}</span>
-                      <span className="text-slate-500 font-mono text-[10px]">({(file.size / 1024).toFixed(0)} KB)</span>
+              {/* INTERACTIVE 3D VIEWPORT */}
+              <div className="relative h-64 sm:h-72 rounded-2xl bg-slate-950 border border-cyan-500/30 overflow-hidden shadow-2xl flex flex-col group select-none">
+                
+                {/* 3D WebGL Canvas */}
+                <div
+                  ref={canvasContainerRef}
+                  className="w-full h-full cursor-grab active:cursor-grabbing flex-1"
+                  onMouseDown={handleMouseDown}
+                  onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUp}
+                  onMouseLeave={handleMouseUp}
+                  onWheel={handleWheel}
+                  onContextMenu={(e) => e.preventDefault()}
+                />
+
+                {/* Parsing / Loading Overlay */}
+                {isParsing3D && (
+                  <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-sm flex flex-col items-center justify-center text-cyan-300 z-20 space-y-3">
+                    <div className="w-10 h-10 border-3 border-cyan-500/20 border-t-cyan-400 rounded-full animate-spin" />
+                    <div className="text-center">
+                      <p className="text-xs font-semibold">3D-Geometrie wird geladen...</p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">Parse STL/3MF Geometrie & erstelle Vorschau</p>
                     </div>
+                  </div>
+                )}
+
+                {/* Top Floating Controls */}
+                {!isParsing3D && (
+                  <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none z-10">
+                    <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-900/80 backdrop-blur-md border border-slate-700/60 pointer-events-auto shadow-md">
+                      <button 
+                        type="button"
+                        onClick={() => setCameraView('iso')} 
+                        className="px-2 py-0.5 text-[11px] font-medium rounded text-slate-300 hover:text-white hover:bg-slate-800 transition"
+                      >
+                        ISO
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => setCameraView('top')} 
+                        className="px-2 py-0.5 text-[11px] font-medium rounded text-slate-300 hover:text-white hover:bg-slate-800 transition"
+                      >
+                        Drauf
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => setCameraView('front')} 
+                        className="px-2 py-0.5 text-[11px] font-medium rounded text-slate-300 hover:text-white hover:bg-slate-800 transition"
+                      >
+                        Vorne
+                      </button>
+                    </div>
+
                     <button
                       type="button"
-                      onClick={() => removeFile(idx)}
-                      className="text-slate-500 hover:text-red-400 transition ml-2"
+                      onClick={() => setAutoRotate(!autoRotate)}
+                      className={`p-1.5 rounded-xl bg-slate-900/80 backdrop-blur-md border border-slate-700/60 pointer-events-auto transition ${autoRotate ? 'text-cyan-400 bg-cyan-950/60 border-cyan-500/60' : 'text-slate-400 hover:text-white'}`}
+                      title="Auto-Drehung"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <RotateCw className={`w-3.5 h-3.5 ${autoRotate ? 'animate-spin' : ''}`} />
                     </button>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* 3D LIVE PREVIEW CONTAINER & LOADING SPINNER */}
-          {files.length > 0 && (
-            <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800/80 space-y-3">
-              <div className="flex items-center justify-between text-xs font-semibold text-slate-300">
-                <span className="flex items-center gap-1.5 text-cyan-400">
-                  <Box className="w-4 h-4" />
-                  3D-Vorschau des Modells
-                </span>
-                {previewStats && (
-                  <span className="font-mono text-[11px] text-slate-400">
-                    {previewStats.dimensions.x} × {previewStats.dimensions.y} × {previewStats.dimensions.z} mm
-                  </span>
                 )}
-              </div>
 
-              {isGeneratingPreview ? (
-                <div className="h-44 rounded-xl bg-slate-950 border border-slate-800 flex flex-col items-center justify-center p-6 text-center space-y-3">
-                  <div className="w-9 h-9 border-3 border-cyan-500/20 border-t-cyan-400 rounded-full animate-spin" />
-                  <div>
-                    <p className="text-xs font-semibold text-cyan-300">3D-Geometrie wird geladen & analysiert...</p>
-                    <p className="text-[10px] text-slate-500 mt-0.5">Berechne 3D-Snapshot, Bemaßung und Volumen</p>
+                {/* Bottom Dimension Stats Overlay */}
+                {previewStats && !isParsing3D && (
+                  <div className="absolute bottom-2.5 left-2.5 px-3 py-1.5 rounded-xl bg-slate-950/80 backdrop-blur-md border border-slate-800 text-[11px] font-mono text-cyan-300 pointer-events-none flex items-center gap-2 shadow-md">
+                    <Box className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>{previewStats.dimensions.x} × {previewStats.dimensions.y} × {previewStats.dimensions.z} mm</span>
+                    <span className="text-slate-500">|</span>
+                    <span className="text-slate-300">{previewStats.volumeCm3} cm³</span>
                   </div>
+                )}
+
+                <div className="absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-xl bg-slate-900/80 backdrop-blur-md border border-slate-700 text-[10px] text-slate-400 pointer-events-none">
+                  🖱️ Maus: Drehen / Zoomen
                 </div>
-              ) : thumbnailDataUrl ? (
-                <div className="relative h-44 rounded-xl bg-slate-950 border border-cyan-500/30 overflow-hidden flex items-center justify-center group shadow-inner">
-                  <img
-                    src={thumbnailDataUrl}
-                    alt="3D Vorschau"
-                    className="w-full h-full object-contain"
-                  />
-                  <div className="absolute bottom-2 right-2 px-2.5 py-1 rounded-lg bg-slate-900/90 backdrop-blur-md border border-slate-700 text-[10px] text-cyan-300 font-mono">
-                    ✓ 3D-Vorschau generiert
-                  </div>
-                </div>
-              ) : (
-                <div className="h-24 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center text-xs text-slate-500">
-                  Vorschau wird beim Auswählen von 3D-Dateien (.stl / .3mf) angezeigt
-                </div>
-              )}
+
+              </div>
             </div>
           )}
 
@@ -471,7 +692,7 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
               </select>
             </div>
 
-            {/* Filament Color (Quick Picker) */}
+            {/* Filament Color (Live re-render on change) */}
             <div>
               <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
                 Vorschau-Farbe (Filament)
@@ -617,7 +838,7 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
               <div className="flex items-center justify-between text-xs font-semibold text-cyan-200">
                 <span className="flex items-center gap-2">
                   <div className="w-3.5 h-3.5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
-                  Speichere {files.length} {files.length > 1 ? 'Modelle' : 'Modell'} in Vault...
+                  Speichere in Vault...
                 </span>
                 <span className="font-mono">{uploadProgress}%</span>
               </div>
@@ -641,7 +862,7 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
             </button>
             <button
               type="submit"
-              disabled={uploading || isGeneratingPreview || files.length === 0}
+              disabled={uploading || isParsing3D || files.length === 0}
               className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white text-sm font-bold shadow-lg shadow-cyan-500/25 transition disabled:opacity-50"
             >
               {uploading ? (

@@ -104,46 +104,106 @@ function parseASCIISTL(data) {
 }
 
 /**
- * Parses 3MF XML model package from buffer using JSZip
+ * Parses 3MF XML model package from buffer using JSZip with multi-object & namespace support
  */
 export async function parse3MF(buffer) {
   const zip = await JSZip.loadAsync(buffer);
   
-  // Find the primary 3D model XML in the 3MF package
-  let modelFile = zip.file('3D/3dmodel.model') || zip.file(/.*\.model$/i)[0];
-  if (!modelFile) {
-    throw new Error('Keine gültige 3D-Geometrie im 3MF Paket gefunden');
-  }
-
-  const modelXmlText = await modelFile.async('text');
-  const parser = new DOMParser();
-  const xmlDoc = parser.parseFromString(modelXmlText, 'text/xml');
-
-  const verticesElements = xmlDoc.getElementsByTagName('vertex');
-  const trianglesElements = xmlDoc.getElementsByTagName('triangle');
-
-  const rawVertices = [];
-  for (let i = 0; i < verticesElements.length; i++) {
-    const v = verticesElements[i];
-    rawVertices.push({
-      x: parseFloat(v.getAttribute('x') || 0),
-      y: parseFloat(v.getAttribute('y') || 0),
-      z: parseFloat(v.getAttribute('z') || 0)
-    });
+  // Find all .model XML files in the 3MF package
+  const modelFiles = zip.file(/.*\.model$/i);
+  if (!modelFiles || modelFiles.length === 0) {
+    throw new Error('Keine 3D-Modelldatei (.model) im 3MF Paket gefunden');
   }
 
   const positions = [];
-  for (let i = 0; i < trianglesElements.length; i++) {
-    const t = trianglesElements[i];
-    const v1 = rawVertices[parseInt(t.getAttribute('v1'), 10)];
-    const v2 = rawVertices[parseInt(t.getAttribute('v2'), 10)];
-    const v3 = rawVertices[parseInt(t.getAttribute('v3'), 10)];
 
-    if (v1 && v2 && v3) {
-      positions.push(v1.x, v1.y, v1.z);
-      positions.push(v2.x, v2.y, v2.z);
-      positions.push(v3.x, v3.y, v3.z);
+  for (const modelFile of modelFiles) {
+    const modelXmlText = await modelFile.async('text');
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(modelXmlText, 'text/xml');
+
+    const allElements = Array.from(xmlDoc.getElementsByTagName('*'));
+    const meshes = allElements.filter(el => el.localName.toLowerCase() === 'mesh');
+
+    if (meshes.length > 0) {
+      for (const mesh of meshes) {
+        const meshChildren = Array.from(mesh.getElementsByTagName('*'));
+        const verticesEls = meshChildren.filter(el => el.localName.toLowerCase() === 'vertex');
+        const trianglesEls = meshChildren.filter(el => el.localName.toLowerCase() === 'triangle');
+
+        const rawVertices = verticesEls.map(v => ({
+          x: parseFloat(v.getAttribute('x') || 0),
+          y: parseFloat(v.getAttribute('y') || 0),
+          z: parseFloat(v.getAttribute('z') || 0)
+        }));
+
+        for (const t of trianglesEls) {
+          const v1 = rawVertices[parseInt(t.getAttribute('v1'), 10)];
+          const v2 = rawVertices[parseInt(t.getAttribute('v2'), 10)];
+          const v3 = rawVertices[parseInt(t.getAttribute('v3'), 10)];
+          if (v1 && v2 && v3) {
+            positions.push(v1.x, v1.y, v1.z);
+            positions.push(v2.x, v2.y, v2.z);
+            positions.push(v3.x, v3.y, v3.z);
+          }
+        }
+      }
+    } else {
+      // Fallback: search all vertex and triangle nodes directly
+      const verticesEls = allElements.filter(el => el.localName.toLowerCase() === 'vertex');
+      const trianglesEls = allElements.filter(el => el.localName.toLowerCase() === 'triangle');
+
+      const rawVertices = verticesEls.map(v => ({
+        x: parseFloat(v.getAttribute('x') || 0),
+        y: parseFloat(v.getAttribute('y') || 0),
+        z: parseFloat(v.getAttribute('z') || 0)
+      }));
+
+      for (const t of trianglesEls) {
+        const v1 = rawVertices[parseInt(t.getAttribute('v1'), 10)];
+        const v2 = rawVertices[parseInt(t.getAttribute('v2'), 10)];
+        const v3 = rawVertices[parseInt(t.getAttribute('v3'), 10)];
+        if (v1 && v2 && v3) {
+          positions.push(v1.x, v1.y, v1.z);
+          positions.push(v2.x, v2.y, v2.z);
+          positions.push(v3.x, v3.y, v3.z);
+        }
+      }
     }
+  }
+
+  // Fast regex fallback if XML DOM parser didn't match
+  if (positions.length === 0) {
+    for (const modelFile of modelFiles) {
+      const xml = await modelFile.async('text');
+      const vertexRegex = /<(?:\w+:)?vertex\b[^>]*\bx=["']([^"']+)["'][^>]*\by=["']([^"']+)["'][^>]*\bz=["']([^"']+)["'][^>]*\/?>/gi;
+      const triangleRegex = /<(?:\w+:)?triangle\b[^>]*\bv1=["']([^"']+)["'][^>]*\bv2=["']([^"']+)["'][^>]*\bv3=["']([^"']+)["'][^>]*\/?>/gi;
+
+      const rawVertices = [];
+      let match;
+      while ((match = vertexRegex.exec(xml)) !== null) {
+        rawVertices.push({
+          x: parseFloat(match[1]),
+          y: parseFloat(match[2]),
+          z: parseFloat(match[3])
+        });
+      }
+
+      while ((match = triangleRegex.exec(xml)) !== null) {
+        const v1 = rawVertices[parseInt(match[1], 10)];
+        const v2 = rawVertices[parseInt(match[2], 10)];
+        const v3 = rawVertices[parseInt(match[3], 10)];
+        if (v1 && v2 && v3) {
+          positions.push(v1.x, v1.y, v1.z);
+          positions.push(v2.x, v2.y, v2.z);
+          positions.push(v3.x, v3.y, v3.z);
+        }
+      }
+    }
+  }
+
+  if (positions.length === 0) {
+    throw new Error('Keine 3D-Polygon-Daten im 3MF Paket gefunden');
   }
 
   const geometry = new THREE.BufferGeometry();
