@@ -1,0 +1,36 @@
+{
+  "name": "stl-storage",
+  "version": "1.0.0",
+  "description": "Moderner Open-Source 3D-Druck-Katalog für STL und 3MF Dateien mit 3D-WebGL-Vorschau und Slicer-Integration",
+  "main": "server/index.js",
+  "type": "module",
+  "scripts": {
+    "server": "node server/index.js",
+    "client": "npm run dev --prefix client",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "build": "npm run build --prefix client",
+    "start": "npm run build && node server/index.js"
+  },
+  "keywords": [
+    "stl",
+    "3mf",
+    "3d-printing",
+    "threejs",
+    "catalog",
+    "slicer",
+    "bambu-studio",
+    "orcaslicer",
+    "prusaslicer"
+  ],
+  "author": "Michael Schellenberger",
+  "license": "CC-BY-NC-4.0",
+  "dependencies": {
+    "archiver": "^7.0.1",
+    "better-sqlite3": "^11.8.1",
+    "chokidar": "^4.0.3",
+    "concurrently": "^9.1.2",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "multer": "^1.4.5-lts.1"
+  }
+}

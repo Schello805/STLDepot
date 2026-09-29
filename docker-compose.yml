@@ -1,0 +1,13 @@
+services:
+  stl-storage:
+    build: .
+    container_name: stl-storage-hub
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - GITHUB_REPO_URL=https://github.com/michaelschellenberger/stl-storage
+    volumes:
+      # Persistent storage for SQLite database, 3D model files, thumbnails, and auto-watch folder
+      - ./data:/app/data
