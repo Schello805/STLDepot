@@ -90,7 +90,7 @@
 
 ---
 
-### Option 2: Docker & Docker-Compose (Empfohlen für NAS / Server)
+### Option 2: Docker & Docker-Compose (Empfohlen für NAS / Heimserver)
 
 Starte die Anwendung mit einem einzigen Befehl:
 
@@ -100,6 +100,39 @@ docker compose up -d --build
 
 - Die Weboberfläche ist anschließend unter `http://<DEINE-IP>:3001` erreichbar.
 - Alle Daten, 3D-Modelle und Thumbnails werden persistent im lokalen Ordner `./data` gespeichert.
+
+---
+
+### Option 3: CapRover One-Click Deployment (PaaS Cloud & VPS)
+
+STLDepot bringt eine fertige `captain-definition` mit und kann direkt auf deinem **CapRover Server** betrieben werden:
+
+1. **Neue App in CapRover anlegen:**
+   - Gehe in dein CapRover Dashboard zu **Apps** -> **Create New App**.
+   - Name eingeben: z. B. `stldepot`.
+   - Setze einen Haken bei **"Has Persistent Data"** und klicke auf *Create New App*.
+
+2. **Persistenten Speicherpfad mounten:**
+   - Öffne die App-Einstellungen -> Reiter **App Configs**.
+   - Scrolle zu **Persistent Directories** und füge folgenden Pfad hinzu:
+     - **Path in Container:** `/app/data`
+     - **Label:** `stldepot-data`
+   - Klicke auf *Save & Update*.
+
+3. **Deployen:**
+   - **Variante A (GitHub Verlinkung - Empfohlen):**
+     - Gehe zum Reiter **Deployment** -> **Deploy from Github/Bitbucket**.
+     - Repository URL: `https://github.com/Schello805/STLDepot`
+     - Branch: `main`
+     - Klicke auf *Save & Build*.
+   - **Variante B (CapRover CLI):**
+     ```bash
+     caprover deploy -a stldepot
+     ```
+
+4. **SSL / HTTPS aktivieren:**
+   - Im Reiter **HTTP Settings** kannst du mit einem Klick ein kostenloses **Let's Encrypt SSL-Zertifikat** aktivieren.
+   - Fertig! Dein STL-Storage Hub ist nun weltweit gesichert unter deiner Subdomain erreichbar.
 
 ---
 
