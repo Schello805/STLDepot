@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   X, 
   UploadCloud, 
@@ -10,14 +10,16 @@ import {
   Layers, 
   Clock, 
   Ruler, 
-  Palette,
+  Palette, 
   AlertCircle,
   ChevronDown,
   ChevronUp,
   Files,
-  FolderArchive
+  FolderArchive,
+  RefreshCw,
+  Box
 } from 'lucide-react';
-import { parseSTL, parse3MF, generateThumbnailSnapshot } from '../utils/threeUtils';
+import { parseSTL, parse3MF, analyzeGeometry, generateThumbnailSnapshot } from '../utils/threeUtils';
 import confetti from 'canvas-confetti';
 
 export default function UploadModal({ onClose, onUploadSuccess }) {
@@ -45,7 +47,12 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
   const [tagInput, setTagInput] = useState('');
   const [tags, setTags] = useState([]);
 
+  // Preview & Loading States
   const [thumbnailDataUrl, setThumbnailDataUrl] = useState(null);
+  const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
+  const [previewStats, setPreviewStats] = useState(null);
+  const [currentGeometry, setCurrentGeometry] = useState(null);
+
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState(null);
@@ -64,13 +71,41 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
 
   const filamentOptions = ['PLA', 'PETG', 'ABS', 'ASA', 'TPU / Flex', 'PCTG', 'Nylon / PA', 'PC', 'Resin'];
 
+  const process3DPreview = async (file, color) => {
+    setIsGeneratingPreview(true);
+    setError(null);
+    try {
+      const buffer = await file.arrayBuffer();
+      let geom;
+      if (file.name.toLowerCase().endsWith('.3mf')) {
+        geom = await parse3MF(buffer);
+      } else {
+        geom = parseSTL(buffer);
+      }
+
+      setCurrentGeometry(geom);
+      const stats = analyzeGeometry(geom);
+      setPreviewStats(stats);
+
+      const thumbUrl = await generateThumbnailSnapshot(geom, color, 600, 450);
+      if (thumbUrl) {
+        setThumbnailDataUrl(thumbUrl);
+      }
+    } catch (err) {
+      console.warn('3D Preview generation note:', err);
+      // Don't fail the upload if preview fails, just log
+    } finally {
+      setIsGeneratingPreview(false);
+    }
+  };
+
   const handleFileChange = async (newFiles) => {
     const validFiles = Array.from(newFiles);
     if (validFiles.length === 0) return;
 
     setFiles(prev => [...prev, ...validFiles]);
 
-    // Automatically switch to batch mode if more than 1 file is selected and not already in assembly mode
+    // Automatically switch to batch mode if more than 1 file is selected
     if (validFiles.length > 1 || files.length + validFiles.length > 1) {
       setUploadMode('batch');
     }
@@ -82,31 +117,35 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
       setTitle(formattedTitle);
     }
 
-    // Auto-generate 3D thumbnail immediately
+    // Trigger preview generation with loading spinner
     const first3d = validFiles.find(f => f.name.toLowerCase().endsWith('.stl') || f.name.toLowerCase().endsWith('.3mf'));
-    if (first3d && !thumbnailDataUrl) {
+    if (first3d) {
+      process3DPreview(first3d, filamentColor);
+    }
+  };
+
+  // Re-render thumbnail when filament color changes
+  const handleColorChange = async (newColor) => {
+    setFilamentColor(newColor);
+    if (currentGeometry) {
       try {
-        const buffer = await first3d.arrayBuffer();
-        let geom;
-        if (first3d.name.toLowerCase().endsWith('.3mf')) {
-          geom = await parse3MF(buffer);
-        } else {
-          geom = parseSTL(buffer);
-        }
-        const thumbUrl = await generateThumbnailSnapshot(geom, filamentColor, 600, 450);
+        const thumbUrl = await generateThumbnailSnapshot(currentGeometry, newColor, 600, 450);
         if (thumbUrl) {
           setThumbnailDataUrl(thumbUrl);
         }
-      } catch (err) {
-        console.warn('Preview snapshot note:', err);
-      }
+      } catch (e) {}
     }
   };
 
   const removeFile = (index) => {
     const remaining = files.filter((_, i) => i !== index);
     setFiles(remaining);
-    if (remaining.length <= 1) {
+    if (remaining.length === 0) {
+      setThumbnailDataUrl(null);
+      setPreviewStats(null);
+      setCurrentGeometry(null);
+      setUploadMode('single');
+    } else if (remaining.length === 1) {
       setUploadMode('single');
     }
   };
@@ -141,7 +180,7 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
     setUploadProgress(10);
 
     try {
-      // BULK MODE: Upload hundreds of files as individual models in chunks
+      // BULK MODE: Upload files as individual models in chunks
       if (uploadMode === 'batch' && files.length > 1) {
         const CHUNK_SIZE = 25;
         const totalFiles = files.length;
@@ -246,7 +285,7 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
             </div>
             <div>
               <h2 className="text-lg font-bold text-slate-100">3D-Modelle hinzufügen</h2>
-              <p className="text-xs text-slate-400">Einzelne Modelle, Baugruppen oder Massen-Upload (auch hunderte Dateien)</p>
+              <p className="text-xs text-slate-400">Einzelne Modelle, Baugruppen oder Massen-Upload</p>
             </div>
           </div>
           <button 
@@ -276,7 +315,7 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
                 e.preventDefault();
                 handleFileChange(e.dataTransfer.files);
               }}
-              className="border-2 border-dashed border-cyan-500/40 hover:border-cyan-400 rounded-2xl p-6 sm:p-8 flex flex-col items-center justify-center cursor-pointer bg-slate-950/60 hover:bg-slate-950/80 transition-all text-center group shadow-inner"
+              className="border-2 border-dashed border-cyan-500/40 hover:border-cyan-400 rounded-2xl p-5 sm:p-6 flex flex-col items-center justify-center cursor-pointer bg-slate-950/60 hover:bg-slate-950/80 transition-all text-center group shadow-inner"
             >
               <input
                 ref={fileInputRef}
@@ -286,20 +325,20 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
                 className="hidden"
                 onChange={(e) => handleFileChange(e.target.files)}
               />
-              <div className="w-14 h-14 rounded-2xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                <UploadCloud className="w-7 h-7" />
+              <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                <UploadCloud className="w-6 h-6" />
               </div>
-              <p className="text-base font-bold text-slate-100 group-hover:text-cyan-300 transition-colors">
+              <p className="text-sm font-bold text-slate-100 group-hover:text-cyan-300 transition-colors">
                 Klicke hier oder ziehe STL- / 3MF-Dateien hinein
               </p>
-              <p className="text-xs text-slate-400 mt-1 max-w-md">
-                Einfach Dateien oder ganze Sammlungen auswählen – auch hunderte Dateien auf einmal möglich!
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Einzelteile, Baugruppen oder dutzende Dateien gleichzeitig
               </p>
             </div>
 
             {/* Multiple files mode selector */}
             {files.length > 1 && (
-              <div className="mt-4 p-3 bg-slate-950/70 rounded-2xl border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="mt-3 p-3 bg-slate-950/70 rounded-2xl border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
                 <div className="flex items-center gap-2 text-xs text-slate-300">
                   <Files className="w-4 h-4 text-cyan-400" />
                   <span><strong>{files.length} Dateien</strong> ausgewählt</span>
@@ -333,8 +372,8 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
 
             {/* Selected Files List preview */}
             {files.length > 0 && (
-              <div className="mt-3 max-h-36 overflow-y-auto space-y-1.5 pr-1">
-                {files.slice(0, 15).map((file, idx) => (
+              <div className="mt-3 max-h-28 overflow-y-auto space-y-1.5 pr-1">
+                {files.slice(0, 10).map((file, idx) => (
                   <div key={idx} className="flex items-center justify-between p-2 px-3 bg-slate-950/50 rounded-xl border border-slate-800/80 text-xs">
                     <div className="flex items-center gap-2 truncate">
                       <FileBox className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
@@ -350,14 +389,51 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
                     </button>
                   </div>
                 ))}
-                {files.length > 15 && (
-                  <div className="text-center text-xs text-slate-400 py-1 font-mono">
-                    + {files.length - 15} weitere Dateien in der Warteschlange...
-                  </div>
-                )}
               </div>
             )}
           </div>
+
+          {/* 3D LIVE PREVIEW CONTAINER & LOADING SPINNER */}
+          {files.length > 0 && (
+            <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800/80 space-y-3">
+              <div className="flex items-center justify-between text-xs font-semibold text-slate-300">
+                <span className="flex items-center gap-1.5 text-cyan-400">
+                  <Box className="w-4 h-4" />
+                  3D-Vorschau des Modells
+                </span>
+                {previewStats && (
+                  <span className="font-mono text-[11px] text-slate-400">
+                    {previewStats.dimensions.x} × {previewStats.dimensions.y} × {previewStats.dimensions.z} mm
+                  </span>
+                )}
+              </div>
+
+              {isGeneratingPreview ? (
+                <div className="h-44 rounded-xl bg-slate-950 border border-slate-800 flex flex-col items-center justify-center p-6 text-center space-y-3">
+                  <div className="w-9 h-9 border-3 border-cyan-500/20 border-t-cyan-400 rounded-full animate-spin" />
+                  <div>
+                    <p className="text-xs font-semibold text-cyan-300">3D-Geometrie wird geladen & analysiert...</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Berechne 3D-Snapshot, Bemaßung und Volumen</p>
+                  </div>
+                </div>
+              ) : thumbnailDataUrl ? (
+                <div className="relative h-44 rounded-xl bg-slate-950 border border-cyan-500/30 overflow-hidden flex items-center justify-center group shadow-inner">
+                  <img
+                    src={thumbnailDataUrl}
+                    alt="3D Vorschau"
+                    className="w-full h-full object-contain"
+                  />
+                  <div className="absolute bottom-2 right-2 px-2.5 py-1 rounded-lg bg-slate-900/90 backdrop-blur-md border border-slate-700 text-[10px] text-cyan-300 font-mono">
+                    ✓ 3D-Vorschau generiert
+                  </div>
+                </div>
+              ) : (
+                <div className="h-24 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center text-xs text-slate-500">
+                  Vorschau wird beim Auswählen von 3D-Dateien (.stl / .3mf) angezeigt
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Simple Form Fields */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -373,7 +449,7 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
                   required
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="z. B. Hexagon Kabelhalter V2"
+                  placeholder="z. B. Mini Stormtrooper"
                   className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
                 />
               </div>
@@ -404,13 +480,13 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
                 <input
                   type="color"
                   value={filamentColor}
-                  onChange={(e) => setFilamentColor(e.target.value)}
+                  onChange={(e) => handleColorChange(e.target.value)}
                   className="w-10 h-10 rounded-xl cursor-pointer bg-transparent border-0"
                 />
                 <input
                   type="text"
                   value={filamentColor}
-                  onChange={(e) => setFilamentColor(e.target.value)}
+                  onChange={(e) => handleColorChange(e.target.value)}
                   className="flex-1 px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-slate-200 font-mono uppercase"
                 />
               </div>
@@ -537,14 +613,17 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
 
           {/* Upload Progress Bar */}
           {uploading && (
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-xs text-slate-300">
-                <span>Lade {files.length} Modelle hoch...</span>
-                <span>{uploadProgress}%</span>
+            <div className="p-4 rounded-2xl bg-cyan-950/60 border border-cyan-800/80 space-y-2">
+              <div className="flex items-center justify-between text-xs font-semibold text-cyan-200">
+                <span className="flex items-center gap-2">
+                  <div className="w-3.5 h-3.5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                  Speichere {files.length} {files.length > 1 ? 'Modelle' : 'Modell'} in Vault...
+                </span>
+                <span className="font-mono">{uploadProgress}%</span>
               </div>
-              <div className="w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+              <div className="w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-cyan-900">
                 <div 
-                  className="h-full bg-gradient-to-r from-cyan-500 to-teal-400 transition-all duration-300"
+                  className="h-full bg-gradient-to-r from-cyan-400 via-teal-400 to-emerald-400 transition-all duration-300"
                   style={{ width: `${uploadProgress}%` }}
                 />
               </div>
@@ -562,13 +641,13 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
             </button>
             <button
               type="submit"
-              disabled={uploading || files.length === 0}
+              disabled={uploading || isGeneratingPreview || files.length === 0}
               className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white text-sm font-bold shadow-lg shadow-cyan-500/25 transition disabled:opacity-50"
             >
               {uploading ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                  <span>Speichere {files.length} Modelle...</span>
+                  <span>Speichere...</span>
                 </>
               ) : (
                 <>
