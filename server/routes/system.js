@@ -62,4 +62,29 @@ router.post('/scan', (req, res) => {
   }
 });
 
+// POST /api/system/open-folder - Opens folder in Finder / File Explorer
+router.post('/open-folder', (req, res) => {
+  try {
+    const folderPath = req.body.path || WATCH_DIR;
+    if (!fs.existsSync(folderPath)) {
+      fs.mkdirSync(folderPath, { recursive: true });
+    }
+
+    let command = '';
+    const platform = process.platform;
+    if (platform === 'darwin') {
+      command = `open "${folderPath}"`;
+    } else if (platform === 'win32') {
+      command = `explorer "${folderPath.replace(/\//g, '\\')}"`;
+    } else {
+      command = `xdg-open "${folderPath}"`;
+    }
+
+    execSync(command);
+    res.json({ success: true, message: 'Ordner im Dateimanager geöffnet.' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 export default router;
