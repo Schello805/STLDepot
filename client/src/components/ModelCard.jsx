@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Box, 
   Download, 
@@ -16,6 +16,7 @@ import {
   Printer
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { parseSTL, parse3MF, generateThumbnailSnapshot } from '../utils/threeUtils';
 
 export default function ModelCard({ 
   model, 
@@ -27,6 +28,8 @@ export default function ModelCard({
 }) {
   const [isHovered, setIsHovered] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [dynamicThumb, setDynamicThumb] = useState(model.thumbnail_url || null);
+  const [loadingThumb, setLoadingThumb] = useState(!model.thumbnail_url);
 
   // Format file size
   const formatFileSize = (bytes) => {
@@ -44,6 +47,59 @@ export default function ModelCard({
     return `${mins}m`;
   };
 
+  const primaryModelFile = model.files?.find(f => f.file_type === 'stl' || f.file_type === '3mf');
+
+  // Auto-render 3D thumbnail in background if missing
+  useEffect(() => {
+    if (model.thumbnail_url) {
+      setDynamicThumb(model.thumbnail_url);
+      setLoadingThumb(false);
+      return;
+    }
+
+    if (!primaryModelFile) {
+      setLoadingThumb(false);
+      return;
+    }
+
+    let isMounted = true;
+    const renderPreview = async () => {
+      try {
+        const response = await fetch(`/api/models/files/${primaryModelFile.id}/raw`);
+        if (!response.ok) throw new Error('Could not fetch 3D file for thumbnail');
+        const buffer = await response.arrayBuffer();
+
+        let geom;
+        if (primaryModelFile.file_type === '3mf') {
+          geom = await parse3MF(buffer);
+        } else {
+          geom = parseSTL(buffer);
+        }
+
+        const dataUrl = await generateThumbnailSnapshot(geom, model.filament_color || '#38bdf8', 480, 360);
+        if (dataUrl && isMounted) {
+          setDynamicThumb(dataUrl);
+          // Persist to server in background
+          fetch(`/api/models/${model.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ thumbnail_base64: dataUrl })
+          }).catch(() => {});
+        }
+      } catch (err) {
+        // Fallback gracefully
+      } finally {
+        if (isMounted) setLoadingThumb(false);
+      }
+    };
+
+    renderPreview();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [model.id, model.thumbnail_url, primaryModelFile]);
+
   const handleDownload = async (e) => {
     e.stopPropagation();
     setDownloading(true);
@@ -60,7 +116,6 @@ export default function ModelCard({
   };
 
   const stlCount = model.files?.filter(f => f.file_type === 'stl' || f.file_type === '3mf').length || 0;
-  const primaryModelFile = model.files?.find(f => f.file_type === 'stl' || f.file_type === '3mf');
 
   return (
     <div 
@@ -69,16 +124,21 @@ export default function ModelCard({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* Card Thumbnail / Preview Banner */}
+      {/* Card Thumbnail / 3D Preview Banner */}
       <div className="relative aspect-[4/3] w-full bg-slate-950 overflow-hidden flex items-center justify-center border-b border-slate-800/80">
         
-        {model.thumbnail_url ? (
+        {dynamicThumb ? (
           <img 
-            src={model.thumbnail_url} 
+            src={dynamicThumb} 
             alt={model.title}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
             loading="lazy"
           />
+        ) : loadingThumb ? (
+          <div className="flex flex-col items-center justify-center text-slate-500 gap-2">
+            <div className="w-8 h-8 border-2 border-cyan-500/20 border-t-cyan-500 rounded-full animate-spin" />
+            <span className="text-[10px] font-mono text-slate-400">Erzeuge 3D-Vorschau...</span>
+          </div>
         ) : (
           <div className="flex flex-col items-center justify-center text-slate-600 group-hover:text-cyan-400 transition-colors">
             <div 

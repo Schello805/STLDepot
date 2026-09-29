@@ -23,7 +23,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 500 * 1024 * 1024 } // 500 MB max file size
+  limits: { fileSize: 2000 * 1024 * 1024 } // 2 GB max batch size
 });
 
 // GET /api/models - List models with search, category, tag, and sort filters
@@ -284,6 +284,116 @@ router.post('/', upload.array('files', 50), (req, res) => {
     res.json({ success: true, message: 'Modell erfolgreich gespeichert', projectId });
   } catch (err) {
     console.error('Error creating model:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/models/batch - Bulk upload dozens/hundreds of 3D models at once
+router.post('/batch', upload.array('files', 500), (req, res) => {
+  try {
+    const {
+      category = 'Allgemein',
+      filament_type = 'PLA',
+      filament_color = '#38bdf8',
+      author = '',
+      tags = '[]'
+    } = req.body;
+
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ success: false, error: 'Keine Dateien empfangen' });
+    }
+
+    let tagList = [];
+    try {
+      tagList = JSON.parse(tags);
+    } catch {
+      if (typeof tags === 'string') {
+        tagList = tags.split(',').map(t => t.trim()).filter(Boolean);
+      }
+    }
+
+    const insertProject = db.prepare(`
+      INSERT INTO projects (
+        id, title, description, category, author, license,
+        filament_type, filament_color, infill_percentage, print_time_minutes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const insertFile = db.prepare(`
+      INSERT INTO project_files (
+        id, project_id, original_name, stored_name, file_path, file_size, file_type
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const insertTag = db.prepare('INSERT OR IGNORE INTO tags (name) VALUES (?)');
+    const getTag = db.prepare('SELECT id FROM tags WHERE name = ?');
+    const insertProjectTag = db.prepare('INSERT OR IGNORE INTO project_tags (project_id, tag_id) VALUES (?, ?)');
+
+    const createdProjects = [];
+
+    const transaction = db.transaction((files) => {
+      for (const file of files) {
+        const projectId = 'proj_' + crypto.randomBytes(8).toString('hex');
+        const fileId = 'file_' + crypto.randomBytes(8).toString('hex');
+        const ext = path.extname(file.originalname).toLowerCase();
+        const baseName = path.basename(file.originalname, ext);
+        const title = baseName.replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+        let fileType = 'other';
+        if (ext === '.stl') fileType = 'stl';
+        else if (ext === '.3mf') fileType = '3mf';
+        else if (['.png', '.jpg', '.jpeg', '.webp'].includes(ext)) fileType = 'image';
+
+        insertProject.run(
+          projectId,
+          title,
+          `Batch-Import: ${file.originalname}`,
+          category || 'Allgemein',
+          author || 'Michael Schellenberger',
+          'CC BY-NC 4.0',
+          filament_type || 'PLA',
+          filament_color || '#38bdf8',
+          15,
+          0
+        );
+
+        insertFile.run(
+          fileId,
+          projectId,
+          file.originalname,
+          file.filename,
+          file.path,
+          file.size,
+          fileType
+        );
+
+        // Tags
+        if (Array.isArray(tagList)) {
+          for (const t of tagList) {
+            const cleanTag = t.trim();
+            if (!cleanTag) continue;
+            insertTag.run(cleanTag);
+            const tagRecord = getTag.get(cleanTag);
+            if (tagRecord) {
+              insertProjectTag.run(projectId, tagRecord.id);
+            }
+          }
+        }
+
+        createdProjects.push({ id: projectId, title, fileId });
+      }
+    });
+
+    transaction(req.files);
+
+    res.json({
+      success: true,
+      message: `${createdProjects.length} 3D-Modelle erfolgreich importiert`,
+      count: createdProjects.length,
+      projects: createdProjects
+    });
+  } catch (err) {
+    console.error('Error in batch upload:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
