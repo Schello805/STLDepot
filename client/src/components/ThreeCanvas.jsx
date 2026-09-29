@@ -359,6 +359,64 @@ export default function ThreeCanvas({
     cameraRef.current.position.copy(targetLookAtRef.current).add(offset);
   };
 
+  // Touch Controls for Smartphone & Tablet
+  const touchStartDistRef = useRef(0);
+  const handleTouchStart = (e) => {
+    if (!interactive) return;
+    if (e.touches.length === 1) {
+      isDraggingRef.current = true;
+      previousMousePositionRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    } else if (e.touches.length === 2) {
+      isDraggingRef.current = false;
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      touchStartDistRef.current = Math.hypot(dx, dy);
+    }
+  };
+
+  const handleTouchMove = (e) => {
+    if (!interactive) return;
+    if (e.touches.length === 1 && isDraggingRef.current) {
+      const deltaX = e.touches[0].clientX - previousMousePositionRef.current.x;
+      const deltaY = e.touches[0].clientY - previousMousePositionRef.current.y;
+      
+      const rotSpeed = 0.01;
+      const offset = cameraRef.current.position.clone().sub(targetLookAtRef.current);
+      let radius = offset.length();
+      let theta = Math.atan2(offset.x, offset.z);
+      let phi = Math.acos(Math.max(-1, Math.min(1, offset.y / radius)));
+
+      theta -= deltaX * rotSpeed;
+      phi -= deltaY * rotSpeed;
+      phi = Math.max(0.05, Math.min(Math.PI - 0.05, phi));
+
+      offset.x = radius * Math.sin(phi) * Math.sin(theta);
+      offset.y = radius * Math.cos(phi);
+      offset.z = radius * Math.sin(phi) * Math.cos(theta);
+
+      cameraRef.current.position.copy(targetLookAtRef.current).add(offset);
+      cameraRef.current.lookAt(targetLookAtRef.current);
+      previousMousePositionRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    } else if (e.touches.length === 2 && cameraRef.current) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.hypot(dx, dy);
+      if (touchStartDistRef.current > 0) {
+        const factor = touchStartDistRef.current / dist;
+        const zoomDelta = factor > 1 ? 1.03 : 0.97;
+        const offset = cameraRef.current.position.clone().sub(targetLookAtRef.current);
+        offset.multiplyScalar(zoomDelta);
+        cameraRef.current.position.copy(targetLookAtRef.current).add(offset);
+      }
+      touchStartDistRef.current = dist;
+    }
+  };
+
+  const handleTouchEnd = () => {
+    isDraggingRef.current = false;
+    touchStartDistRef.current = 0;
+  };
+
   const filamentColors = [
     { name: 'Cyan Blau', hex: '#38bdf8' },
     { name: 'Maker Orange', hex: '#f97316' },
@@ -372,7 +430,7 @@ export default function ThreeCanvas({
 
   return (
     <div 
-      className="relative rounded-2xl overflow-hidden bg-slate-950 border border-slate-800/80 shadow-2xl flex flex-col group select-none"
+      className="relative rounded-2xl overflow-hidden bg-slate-950 border border-slate-800/80 shadow-2xl flex flex-col group select-none touch-none"
       style={{ height }}
     >
       {/* 3D Canvas Viewport */}
@@ -384,6 +442,9 @@ export default function ThreeCanvas({
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
         onWheel={handleWheel}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
         onContextMenu={(e) => e.preventDefault()}
       />
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Box, 
   Download, 
@@ -13,7 +13,8 @@ import {
   Trash2,
   Tag,
   Share2,
-  Printer
+  Printer,
+  Check
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { parseSTL, parse3MF, generateThumbnailSnapshot } from '../utils/threeUtils';
@@ -24,7 +25,10 @@ export default function ModelCard({
   onOpenSlicer, 
   onToggleFavorite, 
   onDelete,
-  onEdit 
+  onEdit,
+  selectionMode = false,
+  isSelected = false,
+  onToggleSelect
 }) {
   const [isHovered, setIsHovered] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -117,10 +121,22 @@ export default function ModelCard({
 
   const stlCount = model.files?.filter(f => f.file_type === 'stl' || f.file_type === '3mf').length || 0;
 
+  const handleCardClick = () => {
+    if (selectionMode && onToggleSelect) {
+      onToggleSelect(model.id);
+    } else {
+      onOpenViewer(model);
+    }
+  };
+
   return (
     <div 
-      className="group relative bg-slate-900/70 hover:bg-slate-900/90 border border-slate-800 hover:border-cyan-500/40 rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-xl hover:shadow-cyan-950/30 flex flex-col cursor-pointer transform hover:-translate-y-1"
-      onClick={() => onOpenViewer(model)}
+      className={`group relative bg-slate-900/70 hover:bg-slate-900/90 border rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-xl hover:shadow-cyan-950/30 flex flex-col cursor-pointer transform hover:-translate-y-1 ${
+        isSelected 
+          ? 'border-cyan-400 ring-2 ring-cyan-500/50 bg-slate-900' 
+          : 'border-slate-800 hover:border-cyan-500/40'
+      }`}
+      onClick={handleCardClick}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
@@ -151,21 +167,37 @@ export default function ModelCard({
           </div>
         )}
 
-        {/* Favorite Heart Button */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleFavorite(model);
-          }}
-          className={`absolute top-3 right-3 p-2 rounded-xl backdrop-blur-md border transition-all z-10 ${
-            model.is_favorite 
-              ? 'bg-rose-500/20 border-rose-500/50 text-rose-400 scale-105' 
-              : 'bg-slate-900/60 border-slate-700/50 text-slate-400 hover:text-white hover:bg-slate-900'
-          }`}
-          title={model.is_favorite ? 'Aus Favoriten entfernen' : 'Zu Favoriten hinzufügen'}
-        >
-          <Heart className={`w-4 h-4 ${model.is_favorite ? 'fill-rose-400' : ''}`} />
-        </button>
+        {/* Selection Checkbox on Top Right or Favorite Heart */}
+        {selectionMode ? (
+          <div 
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSelect(model.id);
+            }}
+            className={`absolute top-3 right-3 w-6 h-6 rounded-lg border flex items-center justify-center transition-all z-20 ${
+              isSelected 
+                ? 'bg-cyan-500 border-cyan-400 text-slate-950 shadow-md scale-110' 
+                : 'bg-slate-900/80 border-slate-600 text-transparent hover:border-cyan-400'
+            }`}
+          >
+            <Check className="w-4 h-4 stroke-[3]" />
+          </div>
+        ) : (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleFavorite(model);
+            }}
+            className={`absolute top-3 right-3 p-2 rounded-xl backdrop-blur-md border transition-all z-10 ${
+              model.is_favorite 
+                ? 'bg-rose-500/20 border-rose-500/50 text-rose-400 scale-105' 
+                : 'bg-slate-900/60 border-slate-700/50 text-slate-400 hover:text-white hover:bg-slate-900'
+            }`}
+            title={model.is_favorite ? 'Aus Favoriten entfernen' : 'Zu Favoriten hinzufügen'}
+          >
+            <Heart className={`w-4 h-4 ${model.is_favorite ? 'fill-rose-400' : ''}`} />
+          </button>
+        )}
 
         {/* Top-Left Category & Multi-Part Badge */}
         <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 z-10">
@@ -180,29 +212,31 @@ export default function ModelCard({
           )}
         </div>
 
-        {/* Floating Quick Action Overlay on Hover */}
-        <div className={`absolute inset-0 bg-slate-950/60 backdrop-blur-[2px] flex items-center justify-center gap-3 transition-opacity duration-200 ${isHovered ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenViewer(model);
-            }}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs shadow-lg transition"
-          >
-            <Maximize2 className="w-3.5 h-3.5" />
-            3D Viewer
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenSlicer(model);
-            }}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-medium text-xs border border-slate-600 shadow-lg transition"
-          >
-            <Printer className="w-3.5 h-3.5 text-cyan-400" />
-            Slicer
-          </button>
-        </div>
+        {/* Floating Quick Action Overlay on Hover (Hidden in selection mode) */}
+        {!selectionMode && (
+          <div className={`absolute inset-0 bg-slate-950/60 backdrop-blur-[2px] flex items-center justify-center gap-3 transition-opacity duration-200 ${isHovered ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenViewer(model);
+              }}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs shadow-lg transition"
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+              3D Viewer
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenSlicer(model);
+              }}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-medium text-xs border border-slate-600 shadow-lg transition"
+            >
+              <Printer className="w-3.5 h-3.5 text-cyan-400" />
+              Slicer
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Card Content & Details */}
@@ -292,7 +326,7 @@ export default function ModelCard({
               title="Projekt als ZIP herunterladen"
             >
               <Download className={`w-3.5 h-3.5 text-cyan-400 ${downloading ? 'animate-bounce' : ''}`} />
-              <span>{downloading ? 'Laden...' : 'Download'}</span>
+              <span className="hidden sm:inline">{downloading ? 'Laden...' : 'Download'}</span>
             </button>
           </div>
         </div>

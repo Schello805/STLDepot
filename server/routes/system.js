@@ -31,7 +31,7 @@ router.get('/info', (req, res) => {
       revision: revision,
       author: 'Michael Schellenberger',
       license: 'CC BY-NC 4.0 (Creative Commons Non-Commercial)',
-      github_repo: process.env.GITHUB_REPO_URL || 'https://github.com/michaelschellenberger/stl-storage',
+      github_repo: process.env.GITHUB_REPO_URL || 'https://github.com/Schello805/STLDepot',
       stats: {
         total_projects: projectCount,
         total_files: fileCount,

@@ -64,8 +64,8 @@
 
 1. **Repository klonen:**
    ```bash
-   git clone https://github.com/michaelschellenberger/stl-storage.git
-   cd stl-storage
+   git clone https://github.com/Schello805/STLDepot.git
+   cd STLDepot
    ```
 
 2. **Abhängigkeiten installieren:**

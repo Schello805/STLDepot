@@ -318,6 +318,61 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
     cameraRef.current.position.copy(targetLookAtRef.current).add(offset);
   };
 
+  // Touch handlers for mobile
+  const uploadTouchDistRef = useRef(0);
+  const handleTouchStart = (e) => {
+    if (e.touches.length === 1) {
+      isDraggingRef.current = true;
+      prevMouseRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    } else if (e.touches.length === 2) {
+      isDraggingRef.current = false;
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      uploadTouchDistRef.current = Math.hypot(dx, dy);
+    }
+  };
+
+  const handleTouchMove = (e) => {
+    if (e.touches.length === 1 && isDraggingRef.current && cameraRef.current) {
+      const deltaX = e.touches[0].clientX - prevMouseRef.current.x;
+      const deltaY = e.touches[0].clientY - prevMouseRef.current.y;
+      const rotSpeed = 0.01;
+      const offset = cameraRef.current.position.clone().sub(targetLookAtRef.current);
+      let radius = offset.length();
+      let theta = Math.atan2(offset.x, offset.z);
+      let phi = Math.acos(Math.max(-1, Math.min(1, offset.y / radius)));
+
+      theta -= deltaX * rotSpeed;
+      phi -= deltaY * rotSpeed;
+      phi = Math.max(0.05, Math.min(Math.PI - 0.05, phi));
+
+      offset.x = radius * Math.sin(phi) * Math.sin(theta);
+      offset.y = radius * Math.cos(phi);
+      offset.z = radius * Math.sin(phi) * Math.cos(theta);
+
+      cameraRef.current.position.copy(targetLookAtRef.current).add(offset);
+      cameraRef.current.lookAt(targetLookAtRef.current);
+      prevMouseRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    } else if (e.touches.length === 2 && cameraRef.current) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.hypot(dx, dy);
+      if (uploadTouchDistRef.current > 0) {
+        const factor = uploadTouchDistRef.current / dist;
+        const zoomDelta = factor > 1 ? 1.03 : 0.97;
+        const offset = cameraRef.current.position.clone().sub(targetLookAtRef.current);
+        offset.multiplyScalar(zoomDelta);
+        cameraRef.current.position.copy(targetLookAtRef.current).add(offset);
+      }
+      uploadTouchDistRef.current = dist;
+    }
+  };
+
+  const handleTouchEnd = () => {
+    isDraggingRef.current = false;
+    uploadTouchDistRef.current = 0;
+  };
+
   const setCameraView = (view) => {
     if (!cameraRef.current || !meshRef.current) return;
     const bbox = new THREE.Box3().setFromObject(meshRef.current);
@@ -575,7 +630,7 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
               </div>
 
               {/* INTERACTIVE 3D VIEWPORT */}
-              <div className="relative h-64 sm:h-72 rounded-2xl bg-slate-950 border border-cyan-500/30 overflow-hidden shadow-2xl flex flex-col group select-none">
+              <div className="relative h-64 sm:h-72 rounded-2xl bg-slate-950 border border-cyan-500/30 overflow-hidden shadow-2xl flex flex-col group select-none touch-none">
                 
                 {/* 3D WebGL Canvas */}
                 <div
@@ -586,6 +641,9 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
                   onMouseUp={handleMouseUp}
                   onMouseLeave={handleMouseUp}
                   onWheel={handleWheel}
+                  onTouchStart={handleTouchStart}
+                  onTouchMove={handleTouchMove}
+                  onTouchEnd={handleTouchEnd}
                   onContextMenu={(e) => e.preventDefault()}
                 />
 

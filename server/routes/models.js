@@ -604,6 +604,58 @@ router.delete('/:id/files/:fileId', (req, res) => {
   }
 });
 
+// POST /api/models/batch-delete - Delete multiple models at once
+router.post('/batch-delete', (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, error: 'Keine Modell-IDs angegeben' });
+    }
+
+    const deleteFiles = db.prepare('SELECT file_path FROM project_files WHERE project_id = ?');
+    const deleteProject = db.prepare('DELETE FROM projects WHERE id = ?');
+
+    const transaction = db.transaction((idList) => {
+      for (const id of idList) {
+        const files = deleteFiles.all(id);
+        for (const file of files) {
+          if (fs.existsSync(file.file_path)) {
+            try { fs.unlinkSync(file.file_path); } catch (e) {}
+          }
+        }
+        deleteProject.run(id);
+      }
+    });
+
+    transaction(ids);
+    res.json({ success: true, message: `${ids.length} Modelle erfolgreich gelöscht` });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/models/batch-category - Move multiple models to a category
+router.post('/batch-category', (req, res) => {
+  try {
+    const { ids, category } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0 || !category) {
+      return res.status(400).json({ success: false, error: 'Ungültige Parameter' });
+    }
+
+    const updateCategory = db.prepare('UPDATE projects SET category = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+    const transaction = db.transaction((idList, cat) => {
+      for (const id of idList) {
+        updateCategory.run(cat, id);
+      }
+    });
+
+    transaction(ids, category);
+    res.json({ success: true, message: `${ids.length} Modelle in "${category}" verschoben` });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // GET /api/models/:id/download - Download project as ZIP
 router.get('/:id/download', (req, res) => {
   try {

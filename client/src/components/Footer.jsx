@@ -11,7 +11,7 @@ function GitHubIcon({ className = "w-4 h-4" }) {
 
 export default function Footer({ systemInfo }) {
   const authorName = systemInfo?.author || 'Michael Schellenberger';
-  const githubUrl = systemInfo?.github_repo || 'https://github.com/michaelschellenberger/stl-storage';
+  const githubUrl = systemInfo?.github_repo || 'https://github.com/Schello805/STLDepot';
   const version = systemInfo?.version || '1.0.0';
   const revision = systemInfo?.revision || 'rev-2026.09';
   const storageFormatted = systemInfo?.stats?.storage_formatted || '0 MB';

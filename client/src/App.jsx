@@ -19,8 +19,15 @@ import {
   SlidersHorizontal,
   RefreshCw,
   HardDrive,
-  UploadCloud
+  UploadCloud,
+  CheckSquare,
+  Square,
+  Trash2,
+  FolderInput,
+  X,
+  Check
 } from 'lucide-react';
+import confetti from 'canvas-confetti';
 
 export default function App() {
   const [models, setModels] = useState([]);
@@ -36,6 +43,12 @@ export default function App() {
   const [onlyFavorites, setOnlyFavorites] = useState(false);
   const [sortBy, setSortBy] = useState('newest');
   const [darkMode, setDarkMode] = useState(true);
+
+  // Batch Selection States
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [batchCategory, setBatchCategory] = useState('');
+  const [isProcessingBatch, setIsProcessingBatch] = useState(false);
 
   // Modal States
   const [activeViewerModel, setActiveViewerModel] = useState(null);
@@ -122,11 +135,15 @@ export default function App() {
         setActiveEditModel(null);
         setIsUploadOpen(false);
         setIsScannerOpen(false);
+        if (selectionMode) {
+          setSelectionMode(false);
+          setSelectedIds([]);
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [selectionMode]);
 
   // Window-wide Drag & Drop handling
   const handleDragEnter = (e) => {
@@ -189,9 +206,74 @@ export default function App() {
     }
   };
 
+  // Batch Selection Handlers
+  const handleToggleSelect = (id) => {
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (selectedIds.length === models.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(models.map(m => m.id));
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.length === 0) return;
+    if (!window.confirm(`Möchtest du wirklich alle ${selectedIds.length} ausgewählten Modelle unwiderruflich löschen?`)) {
+      return;
+    }
+
+    setIsProcessingBatch(true);
+    try {
+      const res = await fetch('/api/models/batch-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: selectedIds })
+      });
+      if (res.ok) {
+        setSelectedIds([]);
+        setSelectionMode(false);
+        fetchModels();
+        fetchMetadata();
+        fetchSystemInfo();
+      }
+    } catch (err) {
+      alert('Fehler beim Löschen der Modelle');
+    } finally {
+      setIsProcessingBatch(false);
+    }
+  };
+
+  const handleBatchMoveCategory = async (cat) => {
+    if (selectedIds.length === 0 || !cat) return;
+    setIsProcessingBatch(true);
+    try {
+      const res = await fetch('/api/models/batch-category', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: selectedIds, category: cat })
+      });
+      if (res.ok) {
+        confetti({ particleCount: 40, spread: 60 });
+        setSelectedIds([]);
+        setSelectionMode(false);
+        fetchModels();
+        fetchMetadata();
+      }
+    } catch (err) {
+      alert('Fehler beim Verschieben');
+    } finally {
+      setIsProcessingBatch(false);
+    }
+  };
+
   return (
     <div 
-      className="min-h-screen bg-slate-950 text-slate-100 flex flex-col bg-grid-pattern selection:bg-cyan-500 selection:text-slate-950"
+      className="min-h-screen bg-slate-950 text-slate-100 flex flex-col bg-grid-pattern selection:bg-cyan-500 selection:text-slate-950 pb-20"
       onDragEnter={handleDragEnter}
       onDragOver={(e) => e.preventDefault()}
       onDragLeave={handleDragLeave}
@@ -228,10 +310,10 @@ export default function App() {
       />
 
       {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6 sm:space-y-8">
         
         {/* Hero Banner with Quick Stats */}
-        <div className="relative rounded-3xl p-6 sm:p-8 bg-gradient-to-r from-slate-900/90 via-slate-900/60 to-cyan-950/40 border border-slate-800/80 shadow-2xl overflow-hidden flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+        <div className="relative rounded-3xl p-5 sm:p-8 bg-gradient-to-r from-slate-900/90 via-slate-900/60 to-cyan-950/40 border border-slate-800/80 shadow-2xl overflow-hidden flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div className="space-y-2 z-10 max-w-2xl">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-semibold">
               <Sparkles className="w-3.5 h-3.5" />
@@ -240,33 +322,33 @@ export default function App() {
             <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
               Dein persönlicher 3D-Modell Katalog
             </h2>
-            <p className="text-sm text-slate-400 leading-relaxed">
+            <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
               Verwalte, visualisiere und öffne deine STL- & 3MF-Dateien direkt im Slicer (Bambu Studio, OrcaSlicer, PrusaSlicer).
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 z-10 w-full md:w-auto">
-            <div className="flex-1 sm:flex-initial p-4 rounded-2xl bg-slate-950/60 border border-slate-800 backdrop-blur-md text-center min-w-[110px]">
-              <div className="text-2xl font-black text-cyan-400 font-mono">{systemInfo?.stats?.total_projects || models.length}</div>
-              <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Modelle</div>
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 z-10 w-full md:w-auto">
+            <div className="flex-1 sm:flex-initial p-3.5 sm:p-4 rounded-2xl bg-slate-950/60 border border-slate-800 backdrop-blur-md text-center min-w-[95px]">
+              <div className="text-xl sm:text-2xl font-black text-cyan-400 font-mono">{systemInfo?.stats?.total_projects || models.length}</div>
+              <div className="text-[10px] sm:text-[11px] font-medium text-slate-400 uppercase tracking-wider">Modelle</div>
             </div>
-            <div className="flex-1 sm:flex-initial p-4 rounded-2xl bg-slate-950/60 border border-slate-800 backdrop-blur-md text-center min-w-[110px]">
-              <div className="text-2xl font-black text-slate-100 font-mono">{categories.length}</div>
-              <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Kategorien</div>
+            <div className="flex-1 sm:flex-initial p-3.5 sm:p-4 rounded-2xl bg-slate-950/60 border border-slate-800 backdrop-blur-md text-center min-w-[95px]">
+              <div className="text-xl sm:text-2xl font-black text-slate-100 font-mono">{categories.length}</div>
+              <div className="text-[10px] sm:text-[11px] font-medium text-slate-400 uppercase tracking-wider">Kategorien</div>
             </div>
-            <div className="flex-1 sm:flex-initial p-4 rounded-2xl bg-slate-950/60 border border-slate-800 backdrop-blur-md text-center min-w-[110px]">
-              <div className="text-2xl font-black text-slate-200 font-mono">{systemInfo?.stats?.storage_formatted || '0 MB'}</div>
-              <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Speicher</div>
+            <div className="flex-1 sm:flex-initial p-3.5 sm:p-4 rounded-2xl bg-slate-950/60 border border-slate-800 backdrop-blur-md text-center min-w-[95px]">
+              <div className="text-xl sm:text-2xl font-black text-slate-200 font-mono">{systemInfo?.stats?.storage_formatted || '0 MB'}</div>
+              <div className="text-[10px] sm:text-[11px] font-medium text-slate-400 uppercase tracking-wider">Speicher</div>
             </div>
           </div>
 
-          {/* Decorative glowing gradient sphere in background */}
           <div className="absolute -right-20 -top-20 w-80 h-80 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
         </div>
 
-        {/* Popular Tags Filter Bar if available */}
-        {tags.length > 0 && (
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar text-xs">
+        {/* Toolbar Bar: Tags & Selection Mode Toggle */}
+        <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
+          {/* Tags */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar flex-1">
             <span className="text-slate-500 font-medium whitespace-nowrap">Tags:</span>
             {selectedTag && (
               <button
@@ -276,7 +358,7 @@ export default function App() {
                 ✕ #{selectedTag}
               </button>
             )}
-            {tags.slice(0, 10).map((t) => (
+            {tags.slice(0, 8).map((t) => (
               <button
                 key={t.id}
                 onClick={() => setSelectedTag(selectedTag === t.name ? '' : t.name)}
@@ -290,7 +372,25 @@ export default function App() {
               </button>
             ))}
           </div>
-        )}
+
+          {/* Selection Mode Button */}
+          {models.length > 0 && (
+            <button
+              onClick={() => {
+                setSelectionMode(!selectionMode);
+                if (selectionMode) setSelectedIds([]);
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition ${
+                selectionMode 
+                  ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-lg shadow-cyan-500/20' 
+                  : 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white hover:border-slate-700'
+              }`}
+            >
+              <CheckSquare className="w-3.5 h-3.5" />
+              <span>{selectionMode ? 'Auswahl beenden' : 'Auswahl-Modus'}</span>
+            </button>
+          )}
+        </div>
 
         {/* Model Catalog Grid */}
         {loading ? (
@@ -299,11 +399,14 @@ export default function App() {
             <p className="text-sm font-medium">Modelle werden geladen...</p>
           </div>
         ) : models.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
             {models.map((model) => (
               <ModelCard
                 key={model.id}
                 model={model}
+                selectionMode={selectionMode}
+                isSelected={selectedIds.includes(model.id)}
+                onToggleSelect={handleToggleSelect}
                 onOpenViewer={(m) => setActiveViewerModel(m)}
                 onOpenSlicer={(m, f) => {
                   setActiveSlicerModel(m);
@@ -355,6 +458,67 @@ export default function App() {
         )}
 
       </main>
+
+      {/* FLOATING BATCH ACTIONS TOOLBAR (WHEN MODELS ARE SELECTED) */}
+      {selectionMode && selectedIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-11/12 max-w-2xl bg-slate-900/95 backdrop-blur-xl border border-cyan-500/40 rounded-2xl p-3 sm:p-4 shadow-2xl shadow-cyan-950/60 flex flex-wrap items-center justify-between gap-3 animate-in slide-in-from-bottom-5 duration-200">
+          <div className="flex items-center gap-2">
+            <span className="px-2.5 py-1 rounded-xl bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs font-mono font-bold">
+              {selectedIds.length} {selectedIds.length === 1 ? 'Modell' : 'Modelle'}
+            </span>
+            <button
+              onClick={handleSelectAll}
+              className="text-xs text-slate-300 hover:text-white underline font-medium"
+            >
+              {selectedIds.length === models.length ? 'Alle abwählen' : 'Alle auswählen'}
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* Category Dropdown mover */}
+            <select
+              onChange={(e) => {
+                if (e.target.value) handleBatchMoveCategory(e.target.value);
+              }}
+              defaultValue=""
+              className="bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-cyan-500 cursor-pointer"
+            >
+              <option value="" disabled>📁 Kategorie zuweisen...</option>
+              {categories.map((c) => (
+                <option key={c.category} value={c.category}>{c.category}</option>
+              ))}
+              <option value="Deko & Haushalt">Deko & Haushalt</option>
+              <option value="Werkstatt & Tools">Werkstatt & Tools</option>
+              <option value="3D-Druck Zubehör">3D-Druck Zubehör</option>
+              <option value="Gadgets & Elektronik">Gadgets & Elektronik</option>
+              <option value="Gaming & Tabletop">Gaming & Tabletop</option>
+            </select>
+
+            {/* Batch Delete */}
+            <button
+              onClick={handleBatchDelete}
+              disabled={isProcessingBatch}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-red-950/80 hover:bg-red-900 text-red-200 text-xs font-bold border border-red-800 transition shadow-sm"
+              title="Ausgewählte Modelle löschen"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-red-400" />
+              <span>Löschen</span>
+            </button>
+
+            {/* Close Selection */}
+            <button
+              onClick={() => {
+                setSelectionMode(false);
+                setSelectedIds([]);
+              }}
+              className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition"
+              title="Auswahl beenden"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Global Modals */}
       {activeViewerModel && (
