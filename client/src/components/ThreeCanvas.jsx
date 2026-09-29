@@ -37,13 +37,14 @@ export default function ThreeCanvas({
   const [color, setColor] = useState(initialColor);
   const [materialMode, setMaterialMode] = useState('standard'); // standard, wireframe, normal, metallic
   const [autoRotate, setAutoRotate] = useState(false);
-  const [showGrid, setShowGrid] = useState(true);
+  const [showGrid, setShowGrid] = useState(false);
   const [showBBox, setShowBBox] = useState(false);
   const [stats, setStats] = useState(null);
+  const bedMeshRef = useRef(null);
 
   // Drag interaction states
   const isDraggingRef = useRef(false);
-  const previousMousePositionRef = useRef({ x: 0, y: 0 });
+  const previousMousePositionRef = useRef({ x: e => {}, y: 0 });
   const isPanningRef = useRef(false);
   const targetLookAtRef = useRef(new THREE.Vector3(0, 10, 0));
 
@@ -101,6 +102,7 @@ export default function ThreeCanvas({
     const gridDivisions = 25;
     const grid = new THREE.GridHelper(gridSize, gridDivisions, 0x06b6d4, 0x334155);
     grid.position.y = 0;
+    grid.visible = false;
     scene.add(grid);
     gridRef.current = grid;
 
@@ -115,7 +117,9 @@ export default function ThreeCanvas({
     const bedMesh = new THREE.Mesh(bedGeo, bedMat);
     bedMesh.rotation.x = Math.PI / 2;
     bedMesh.position.y = -0.1;
+    bedMesh.visible = false;
     scene.add(bedMesh);
+    bedMeshRef.current = bedMesh;
 
     // Animation Loop
     let rotAngle = 0;
@@ -242,6 +246,7 @@ export default function ThreeCanvas({
   // Update Grid / BBox visibility
   useEffect(() => {
     if (gridRef.current) gridRef.current.visible = showGrid;
+    if (bedMeshRef.current) bedMeshRef.current.visible = showGrid;
     if (bboxHelperRef.current) bboxHelperRef.current.visible = showBBox;
   }, [showGrid, showBBox]);
 

@@ -72,6 +72,8 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
   const [previewStats, setPreviewStats] = useState(null);
   const [currentGeometry, setCurrentGeometry] = useState(null);
   const [autoRotate, setAutoRotate] = useState(false);
+  const [showGrid, setShowGrid] = useState(false);
+  const gridRef = useRef(null);
 
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -127,10 +129,12 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
     dirLight2.position.set(-150, 100, -150);
     scene.add(dirLight2);
 
-    // Bed Grid
+    // Bed Grid (hidden by default)
     const grid = new THREE.GridHelper(220, 22, 0x06b6d4, 0x334155);
     grid.position.y = 0;
+    grid.visible = false;
     scene.add(grid);
+    gridRef.current = grid;
 
     const animate = () => {
       animFrameRef.current = requestAnimationFrame(animate);
@@ -258,6 +262,13 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
       setUploadMode('single');
     }
   };
+
+  // Update Grid visibility
+  useEffect(() => {
+    if (gridRef.current) {
+      gridRef.current.visible = showGrid;
+    }
+  }, [showGrid]);
 
   // Custom Mouse/Touch Orbit Controls
   const handleMouseDown = (e) => {
@@ -685,14 +696,24 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
                       </button>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => setAutoRotate(!autoRotate)}
-                      className={`p-1.5 rounded-xl bg-slate-900/80 backdrop-blur-md border border-slate-700/60 pointer-events-auto transition ${autoRotate ? 'text-cyan-400 bg-cyan-950/60 border-cyan-500/60' : 'text-slate-400 hover:text-white'}`}
-                      title="Auto-Drehung"
-                    >
-                      <RotateCw className={`w-3.5 h-3.5 ${autoRotate ? 'animate-spin' : ''}`} />
-                    </button>
+                    <div className="flex items-center gap-1.5 pointer-events-auto">
+                      <button
+                        type="button"
+                        onClick={() => setShowGrid(!showGrid)}
+                        className={`p-1.5 rounded-xl bg-slate-900/80 backdrop-blur-md border border-slate-700/60 transition ${showGrid ? 'text-cyan-400 bg-cyan-950/60 border-cyan-500/60' : 'text-slate-400 hover:text-white'}`}
+                        title="Druckbett Gitter ein-/ausblenden"
+                      >
+                        <Layers className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAutoRotate(!autoRotate)}
+                        className={`p-1.5 rounded-xl bg-slate-900/80 backdrop-blur-md border border-slate-700/60 transition ${autoRotate ? 'text-cyan-400 bg-cyan-950/60 border-cyan-500/60' : 'text-slate-400 hover:text-white'}`}
+                        title="Auto-Drehung"
+                      >
+                        <RotateCw className={`w-3.5 h-3.5 ${autoRotate ? 'animate-spin' : ''}`} />
+                      </button>
+                    </div>
                   </div>
                 )}
 
