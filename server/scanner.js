@@ -6,34 +6,133 @@ import { db, MODELS_DIR, WATCH_DIR } from './db.js';
 
 let watcher = null;
 
-export function scanDirectory(targetDir = WATCH_DIR) {
+export function scanDirectory(targetDir = WATCH_DIR, preserveStructure = true) {
   if (!fs.existsSync(targetDir)) return { added: 0, errors: [] };
 
   let addedCount = 0;
   const errors = [];
 
-  function walk(currentDir) {
-    const entries = fs.readdirSync(currentDir, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = path.join(currentDir, entry.name);
-      if (entry.isDirectory()) {
-        walk(fullPath);
-      } else if (entry.isFile()) {
-        const ext = path.extname(entry.name).toLowerCase();
-        if (ext === '.stl' || ext === '.3mf') {
-          try {
-            const added = importSingleFileFromDisk(fullPath, entry.name, ext);
-            if (added) addedCount++;
-          } catch (err) {
-            errors.push({ file: entry.name, error: err.message });
+  if (preserveStructure) {
+    // Group files by their immediate parent subfolder
+    const folderGroups = new Map(); // groupKey -> [files]
+
+    function collectFiles(currentDir) {
+      const entries = fs.readdirSync(currentDir, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(currentDir, entry.name);
+        if (entry.isDirectory()) {
+          collectFiles(fullPath);
+        } else if (entry.isFile()) {
+          const ext = path.extname(entry.name).toLowerCase();
+          if (ext === '.stl' || ext === '.3mf') {
+            const relDir = path.relative(targetDir, currentDir);
+            const groupKey = relDir === '' ? '__root__' : relDir;
+            if (!folderGroups.has(groupKey)) {
+              folderGroups.set(groupKey, []);
+            }
+            folderGroups.get(groupKey).push({ fullPath, name: entry.name, ext });
           }
         }
       }
     }
+
+    collectFiles(targetDir);
+
+    for (const [groupKey, fileList] of folderGroups.entries()) {
+      if (groupKey === '__root__') {
+        for (const f of fileList) {
+          try {
+            const added = importSingleFileFromDisk(f.fullPath, f.name, f.ext);
+            if (added) addedCount++;
+          } catch (err) {
+            errors.push({ file: f.name, error: err.message });
+          }
+        }
+      } else {
+        try {
+          const folderTitle = path.basename(groupKey).replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+          const added = importMultiPartProjectFromDisk(fileList, folderTitle, groupKey);
+          if (added) addedCount++;
+        } catch (err) {
+          errors.push({ file: groupKey, error: err.message });
+        }
+      }
+    }
+  } else {
+    // Flat: Every STL/3MF becomes an individual project in the catalog
+    function walk(currentDir) {
+      const entries = fs.readdirSync(currentDir, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(currentDir, entry.name);
+        if (entry.isDirectory()) {
+          walk(fullPath);
+        } else if (entry.isFile()) {
+          const ext = path.extname(entry.name).toLowerCase();
+          if (ext === '.stl' || ext === '.3mf') {
+            try {
+              const added = importSingleFileFromDisk(fullPath, entry.name, ext);
+              if (added) addedCount++;
+            } catch (err) {
+              errors.push({ file: entry.name, error: err.message });
+            }
+          }
+        }
+      }
+    }
+    walk(targetDir);
   }
 
-  walk(targetDir);
   return { added: addedCount, errors };
+}
+
+function importMultiPartProjectFromDisk(fileList, folderTitle, groupKey) {
+  if (fileList.length === 0) return false;
+
+  const projectId = 'proj_' + crypto.randomBytes(8).toString('hex');
+  
+  db.prepare(`
+    INSERT INTO projects (
+      id, title, description, category, author, license,
+      filament_type, filament_color, infill_percentage, print_time_minutes
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    projectId,
+    folderTitle,
+    `Baugruppe aus Ordner "${groupKey}" mit ${fileList.length} Teilen`,
+    'Baugruppen',
+    'Michael Schellenberger',
+    'CC BY-NC 4.0',
+    'PLA',
+    '#38bdf8',
+    15,
+    0
+  );
+
+  for (const f of fileList) {
+    const stats = fs.statSync(f.fullPath);
+    const fileId = 'file_' + crypto.randomBytes(8).toString('hex');
+    const storedName = `${fileId}${f.ext}`;
+    const destPath = path.join(MODELS_DIR, storedName);
+
+    fs.copyFileSync(f.fullPath, destPath);
+
+    db.prepare(`
+      INSERT INTO project_files (
+        id, project_id, original_name, stored_name, file_path, file_size, file_type
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      fileId,
+      projectId,
+      f.name,
+      storedName,
+      destPath,
+      stats.size,
+      f.ext.replace('.', '')
+    );
+  }
+
+  console.log(`[Scanner] Auto-imported multi-part project "${folderTitle}" with ${fileList.length} files`);
+  return true;
 }
 
 function importSingleFileFromDisk(sourcePath, originalName, ext) {
@@ -69,8 +168,8 @@ function importSingleFileFromDisk(sourcePath, originalName, ext) {
     projectId,
     title,
     `Automatisch importiert aus: ${path.basename(path.dirname(sourcePath))}`,
-    'Importiert',
-    'Unbekannt',
+    'Deko & Haushalt',
+    'Michael Schellenberger',
     'CC BY-NC 4.0',
     'PLA',
     '#38bdf8',

@@ -50,7 +50,8 @@ router.get('/info', (req, res) => {
 router.post('/scan', (req, res) => {
   try {
     const customPath = req.body.path || WATCH_DIR;
-    const result = scanDirectory(customPath);
+    const preserveStructure = req.body.preserveStructure !== false; // default true
+    const result = scanDirectory(customPath, preserveStructure);
     res.json({
       success: true,
       message: `Scan abgeschlossen: ${result.added} neue 3D-Modelle importiert.`,

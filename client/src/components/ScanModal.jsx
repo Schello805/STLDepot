@@ -13,7 +13,9 @@ import {
   UploadCloud,
   Layers,
   FileBox,
-  Check
+  Check,
+  FolderTree,
+  Files
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -25,6 +27,9 @@ export default function ScanModal({ onClose, onScanComplete, systemInfo }) {
   const [folderOpenFeedback, setFolderOpenFeedback] = useState('');
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+
+  // Structure preference: 'preserve' (subfolders = multi-part assemblies) vs 'flat' (all files individual in root)
+  const [structureMode, setStructureMode] = useState('preserve');
 
   // Native folder selection via browser
   const folderInputRef = useRef(null);
@@ -67,7 +72,10 @@ export default function ScanModal({ onClose, onScanComplete, systemInfo }) {
       const res = await fetch('/api/system/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: customPath })
+        body: JSON.stringify({ 
+          path: customPath,
+          preserveStructure: structureMode === 'preserve'
+        })
       });
 
       const data = await res.json();
@@ -97,12 +105,26 @@ export default function ScanModal({ onClose, onScanComplete, systemInfo }) {
       return name.endsWith('.stl') || name.endsWith('.3mf');
     });
 
-    const folderName = selectedFiles[0]?.webkitRelativePath?.split('/')[0] || 'Ausgewählter Ordner';
+    const rootFolderName = selectedFiles[0]?.webkitRelativePath?.split('/')[0] || 'Ausgewählter Ordner';
+
+    // Group files by subfolder to analyze assemblies
+    const groups = {};
+    for (const f of stlFiles) {
+      const parts = f.webkitRelativePath.split('/');
+      let gName = rootFolderName;
+      if (parts.length > 2) {
+        gName = parts[parts.length - 2];
+      }
+      if (!groups[gName]) groups[gName] = [];
+      groups[gName].push(f);
+    }
 
     setPickedFolderInfo({
-      name: folderName,
+      name: rootFolderName,
       allFiles: selectedFiles,
       stlFiles: stlFiles,
+      groups: groups,
+      groupCount: Object.keys(groups).length,
       count: stlFiles.length
     });
   };
@@ -113,34 +135,73 @@ export default function ScanModal({ onClose, onScanComplete, systemInfo }) {
 
     setIsUploadingPickedFolder(true);
     setError(null);
-    setUploadProgress(10);
+    setUploadProgress(5);
 
     try {
-      // Group files or upload in batch
-      for (let i = 0; i < pickedFolderInfo.stlFiles.length; i++) {
-        const file = pickedFolderInfo.stlFiles[i];
-        const formData = new FormData();
-        const baseTitle = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-        
-        formData.append('title', baseTitle);
-        formData.append('category', 'Deko & Haushalt');
-        formData.append('author', 'Michael Schellenberger');
-        formData.append('files', file);
+      if (structureMode === 'preserve') {
+        // PRESERVE STRUCTURE: Upload each subfolder group as a single multi-part project
+        const groupKeys = Object.keys(pickedFolderInfo.groups);
+        let completed = 0;
 
-        await fetch('/api/models', {
-          method: 'POST',
-          body: formData
+        for (const gName of groupKeys) {
+          const filesInGroup = pickedFolderInfo.groups[gName];
+          const formData = new FormData();
+          const formattedTitle = gName.replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+          formData.append('title', formattedTitle);
+          formData.append('category', groupKeys.length > 1 ? 'Baugruppen' : 'Deko & Haushalt');
+          formData.append('author', 'Michael Schellenberger');
+          formData.append('description', `Importiert aus Ordner "${gName}" (${filesInGroup.length} Teile)`);
+          formData.append('filament_color', '#38bdf8');
+          formData.append('filament_type', 'PLA');
+
+          for (const file of filesInGroup) {
+            formData.append('files', file);
+          }
+
+          await fetch('/api/models', {
+            method: 'POST',
+            body: formData
+          });
+
+          completed++;
+          setUploadProgress(Math.round((completed / groupKeys.length) * 100));
+        }
+
+        confetti({ particleCount: 70, spread: 80 });
+        setResult({
+          message: `${groupKeys.length} Projekte (${pickedFolderInfo.stlFiles.length} 3D-Dateien) mit erhaltener Ordnerstruktur importiert!`,
+          added: groupKeys.length,
+          errors: []
         });
+      } else {
+        // FLAT: Upload each STL as an individual project
+        for (let i = 0; i < pickedFolderInfo.stlFiles.length; i++) {
+          const file = pickedFolderInfo.stlFiles[i];
+          const formData = new FormData();
+          const baseTitle = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
-        setUploadProgress(Math.round(((i + 1) / pickedFolderInfo.stlFiles.length) * 100));
+          formData.append('title', baseTitle);
+          formData.append('category', 'Deko & Haushalt');
+          formData.append('author', 'Michael Schellenberger');
+          formData.append('files', file);
+
+          await fetch('/api/models', {
+            method: 'POST',
+            body: formData
+          });
+
+          setUploadProgress(Math.round(((i + 1) / pickedFolderInfo.stlFiles.length) * 100));
+        }
+
+        confetti({ particleCount: 70, spread: 80 });
+        setResult({
+          message: `${pickedFolderInfo.stlFiles.length} einzelne Modelle erfolgreich im Hauptkatalog angelegt!`,
+          added: pickedFolderInfo.stlFiles.length,
+          errors: []
+        });
       }
 
-      confetti({ particleCount: 70, spread: 80 });
-      setResult({
-        message: `${pickedFolderInfo.stlFiles.length} Modelle aus "${pickedFolderInfo.name}" erfolgreich importiert!`,
-        added: pickedFolderInfo.stlFiles.length,
-        errors: []
-      });
       setPickedFolderInfo(null);
       onScanComplete();
     } catch (err) {
@@ -163,8 +224,8 @@ export default function ScanModal({ onClose, onScanComplete, systemInfo }) {
               <FolderSync className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-slate-100">Ordner scannen & Dateimanager</h2>
-              <p className="text-xs text-slate-400">Öffne den Finder oder wähle einen Ordner mit STL- & 3MF-Dateien</p>
+              <h2 className="text-lg font-bold text-slate-100">Ordner scannen & importieren</h2>
+              <p className="text-xs text-slate-400">Dateien aus Ordnern oder dem Finder strukturiert erfassen</p>
             </div>
           </div>
           <button 
@@ -178,23 +239,81 @@ export default function ScanModal({ onClose, onScanComplete, systemInfo }) {
         {/* Content Body */}
         <div className="p-6 space-y-5 overflow-y-auto max-h-[75vh]">
           
+          {/* STRUCTURE MODE SELECTOR (User Choice: Preserve folder structure vs. Individual files) */}
+          <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2.5">
+            <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block">
+              Import-Modus: Wie sollen die Dateien angelegt werden?
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              
+              {/* Option A: Preserve Folder Structure */}
+              <button
+                type="button"
+                onClick={() => setStructureMode('preserve')}
+                className={`p-3.5 rounded-xl border text-left transition flex flex-col gap-1.5 ${
+                  structureMode === 'preserve'
+                    ? 'bg-cyan-950/60 border-cyan-500 text-white shadow-md'
+                    : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 font-bold text-xs text-cyan-400">
+                    <FolderTree className="w-4 h-4" />
+                    <span>Ordnerstruktur beibehalten</span>
+                  </div>
+                  {structureMode === 'preserve' && (
+                    <span className="w-2 h-2 rounded-full bg-cyan-400 shadow-sm shadow-cyan-400"></span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Unterordner werden als <strong>Baugruppen-Projekt</strong> angelegt. Alle darin liegenden Teile gehören zu einem Modell.
+                </p>
+              </button>
+
+              {/* Option B: Flat / Individual files */}
+              <button
+                type="button"
+                onClick={() => setStructureMode('flat')}
+                className={`p-3.5 rounded-xl border text-left transition flex flex-col gap-1.5 ${
+                  structureMode === 'flat'
+                    ? 'bg-cyan-950/60 border-cyan-500 text-white shadow-md'
+                    : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 font-bold text-xs text-amber-400">
+                    <Files className="w-4 h-4" />
+                    <span>Alle als Einzeldateien (Root)</span>
+                  </div>
+                  {structureMode === 'flat' && (
+                    <span className="w-2 h-2 rounded-full bg-cyan-400 shadow-sm shadow-cyan-400"></span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Jede STL/3MF-Datei wird als <strong>eigenständige Karte</strong> im Katalog angelegt (flache Struktur).
+                </p>
+              </button>
+
+            </div>
+          </div>
+
           {/* OPTION 1: Open in Native OS Finder / Explorer */}
-          <div className="p-5 rounded-2xl bg-gradient-to-br from-cyan-950/40 via-slate-900 to-slate-950 border border-cyan-500/30 space-y-3">
-            <div className="flex items-start justify-between gap-4">
+          <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-cyan-950/40 via-slate-900 to-slate-950 border border-cyan-500/30 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
                   <FolderOpen className="w-4 h-4 text-cyan-400" />
-                  <span>Automatischen Import-Ordner im Finder öffnen</span>
+                  <span>Import-Ordner im Finder / Explorer öffnen</span>
                 </h3>
                 <p className="text-xs text-slate-300 mt-1 leading-relaxed">
-                  Öffnet den Überwachungs-Ordner direkt auf deinem System. Ziehe deine 3D-Dateien einfach per Drag & Drop hinein – sie werden automatisch sofort erfasst!
+                  Öffnet den Überwachungs-Ordner auf deinem Mac/PC. Ziehe deine 3D-Dateien einfach hinein.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => handleOpenInFinder(customPath)}
                 disabled={openingFolder}
-                className="shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs shadow-lg shadow-cyan-500/20 transition active:scale-95 disabled:opacity-50"
+                className="shrink-0 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs shadow-lg shadow-cyan-500/20 transition active:scale-95 disabled:opacity-50"
               >
                 <FolderOpen className="w-4 h-4" />
                 <span>{openingFolder ? 'Öffne...' : 'Im Finder öffnen'}</span>
@@ -209,15 +328,15 @@ export default function ScanModal({ onClose, onScanComplete, systemInfo }) {
           </div>
 
           {/* OPTION 2: Pick any Local Folder via Native OS File Picker */}
-          <div className="p-5 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-3">
-            <div className="flex items-start justify-between gap-4">
+          <div className="p-4 sm:p-5 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
                   <FolderSearch className="w-4 h-4 text-amber-400" />
-                  <span>Beliebigen lokalen Ordner auswählen</span>
+                  <span>Lokalen Ordner über Dateidialog auswählen</span>
                 </h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  Wähle über den systemeigenen Dialog einen beliebigen Ordner auf deiner Festplatte aus, um alle darin liegenden STLs auf einmal zu importieren.
+                  Wähle einen beliebigen Ordner auf deinem Computer aus, um alle enthaltenen Dateien zu erfassen.
                 </p>
               </div>
 
@@ -235,7 +354,7 @@ export default function ScanModal({ onClose, onScanComplete, systemInfo }) {
               <button
                 type="button"
                 onClick={() => folderInputRef.current?.click()}
-                className="shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 font-semibold text-xs border border-slate-700 transition"
+                className="shrink-0 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 font-semibold text-xs border border-slate-700 transition"
               >
                 <FolderSearch className="w-4 h-4 text-amber-400" />
                 <span>Ordner wählen...</span>
@@ -244,14 +363,17 @@ export default function ScanModal({ onClose, onScanComplete, systemInfo }) {
 
             {/* If folder picked */}
             {pickedFolderInfo && (
-              <div className="p-3.5 rounded-xl bg-amber-950/40 border border-amber-800/60 flex items-center justify-between gap-3 text-xs">
+              <div className="p-4 rounded-xl bg-amber-950/40 border border-amber-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs animate-in fade-in">
                 <div>
                   <div className="font-semibold text-amber-200 flex items-center gap-1.5">
                     <FileBox className="w-4 h-4 text-amber-400" />
-                    <span>Ordner: {pickedFolderInfo.name}</span>
+                    <span>Ordner: "{pickedFolderInfo.name}"</span>
                   </div>
                   <p className="text-[11px] text-amber-300/80 mt-0.5">
-                    {pickedFolderInfo.count} STL/3MF {pickedFolderInfo.count === 1 ? 'Datei' : 'Dateien'} gefunden
+                    {pickedFolderInfo.count} STL/3MF Dateien gefunden 
+                    {structureMode === 'preserve' 
+                      ? ` (wird in ${pickedFolderInfo.groupCount} Baugruppen aufgeteilt)` 
+                      : ` (wird als ${pickedFolderInfo.count} Einzelmodelle importiert)`}
                   </p>
                 </div>
 
@@ -259,7 +381,7 @@ export default function ScanModal({ onClose, onScanComplete, systemInfo }) {
                   type="button"
                   onClick={handleUploadPickedFolder}
                   disabled={isUploadingPickedFolder || pickedFolderInfo.count === 0}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition disabled:opacity-50"
+                  className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition disabled:opacity-50 shadow-md"
                 >
                   {isUploadingPickedFolder ? (
                     <>
@@ -269,7 +391,7 @@ export default function ScanModal({ onClose, onScanComplete, systemInfo }) {
                   ) : (
                     <>
                       <Check className="w-3.5 h-3.5 stroke-[3]" />
-                      <span>{pickedFolderInfo.count} Dateien importieren</span>
+                      <span>{pickedFolderInfo.count} Dateien jetzt importieren</span>
                     </>
                   )}
                 </button>
@@ -284,7 +406,7 @@ export default function ScanModal({ onClose, onScanComplete, systemInfo }) {
                 <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
                   Server-Pfad direkt scannen
                 </label>
-                <span className="text-[10px] text-slate-500">Für NAS oder Docker</span>
+                <span className="text-[10px] text-slate-500">Für NAS oder Docker-Pfade</span>
               </div>
               <div className="flex gap-2">
                 <input
