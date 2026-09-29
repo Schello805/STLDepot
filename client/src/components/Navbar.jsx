@@ -34,11 +34,13 @@ export default function Navbar({
         <div className="flex items-center justify-between h-20 gap-4">
           
           {/* Brand Logo & Title */}
-          <div className="flex items-center gap-3.5 cursor-pointer select-none" onClick={() => { setSearchQuery(''); setSelectedCategory('Alle'); setOnlyFavorites(false); }}>
-            <div className="relative flex items-center justify-center w-11 h-11 rounded-2xl bg-gradient-to-tr from-cyan-600 via-teal-500 to-sky-400 p-0.5 shadow-lg shadow-cyan-500/20 group">
-              <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center group-hover:scale-95 transition-transform">
-                <Box className="w-6 h-6 text-cyan-400 animate-pulse" />
-              </div>
+          <div className="flex items-center gap-3 cursor-pointer select-none" onClick={() => { setSearchQuery(''); setSelectedCategory('Alle'); setOnlyFavorites(false); }}>
+            <div className="relative flex items-center justify-center w-11 h-11 rounded-2xl bg-gradient-to-tr from-cyan-500/30 via-slate-800 to-amber-500/30 p-0.5 shadow-lg shadow-cyan-500/20 group overflow-hidden">
+              <img 
+                src="/logo.png" 
+                alt="STLDepot Logo" 
+                className="w-full h-full object-contain rounded-xl drop-shadow group-hover:scale-105 transition-transform" 
+              />
             </div>
             <div>
               <div className="flex items-center gap-2">

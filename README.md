@@ -1,7 +1,7 @@
-# 📦 STL-Storage Hub
+# 📦 STLDepot (STL-Storage Hub)
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/michaelschellenberger/stl-storage/main/assets/banner.png" alt="STL-Storage Hub Banner" width="750" onerror="this.style.display='none'"/>
+  <img src="assets/logo.png" alt="STLDepot Logo" width="180"/>
 </p>
 
 <p align="center">

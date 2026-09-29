@@ -24,8 +24,8 @@ export default function Footer({ systemInfo }) {
           
           {/* Project & Creator Info */}
           <div className="flex flex-col sm:flex-row items-center gap-3 text-center sm:text-left">
-            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 text-cyan-400 shadow-inner">
-              <Box className="w-5 h-5" />
+            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 shadow-inner overflow-hidden p-0.5">
+              <img src="/logo.png" alt="STLDepot Logo" className="w-full h-full object-contain" />
             </div>
             <div>
               <div className="flex items-center gap-2 justify-center sm:justify-start">
