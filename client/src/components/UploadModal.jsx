@@ -20,7 +20,10 @@ import {
   RotateCw,
   Box,
   RefreshCw,
-  Maximize2
+  Maximize2,
+  Globe,
+  Link2,
+  ExternalLink
 } from 'lucide-react';
 import { 
   parseSTL, 
@@ -79,6 +82,49 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState(null);
   const fileInputRef = useRef(null);
+
+  const [activeSourceTab, setActiveSourceTab] = useState('file'); // 'file' or 'web'
+  const [webUrl, setWebUrl] = useState('');
+  const [webStatus, setWebStatus] = useState('');
+
+  const handleWebImport = async (e) => {
+    e.preventDefault();
+    if (!webUrl.trim() || !webUrl.startsWith('http')) {
+      setError('Bitte gib eine gültige URL ein (z.B. von MakerWorld, Printables, Thingiverse oder direkte .stl/.3mf URL).');
+      return;
+    }
+
+    setUploading(true);
+    setError(null);
+    setWebStatus('Analysiere Web-Quelle und lade 3D-Dateien herunter...');
+
+    try {
+      const res = await fetch('/api/web-import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: webUrl.trim(),
+          category,
+          filament_type: filamentType,
+          filament_color: filamentColor
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Web-Import fehlgeschlagen');
+      }
+
+      confetti({ particleCount: 70, spread: 80, origin: { y: 0.7 } });
+      onUploadSuccess();
+      onClose();
+    } catch (err) {
+      setError(err.message || 'Verbindungsfehler beim Web-Import');
+    } finally {
+      setUploading(false);
+      setWebStatus('');
+    }
+  };
 
   const categories = [
     'Deko & Haushalt',
@@ -551,7 +597,7 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
             </div>
             <div>
               <h2 className="text-lg font-bold text-slate-100">3D-Modelle hinzufügen</h2>
-              <p className="text-xs text-slate-400">STL & 3MF Dateien mit interaktiver 3D-Vorschau</p>
+              <p className="text-xs text-slate-400">STL & 3MF Dateien hochladen oder direkt aus dem Web importieren</p>
             </div>
           </div>
           <button 
@@ -562,7 +608,184 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
           </button>
         </div>
 
-        {/* Content Form */}
+        {/* Source Switcher Tabs */}
+        <div className="flex border-b border-slate-800 bg-slate-950/40 px-6 pt-3 gap-2">
+          <button
+            type="button"
+            onClick={() => { setActiveSourceTab('file'); setError(null); }}
+            className={`flex items-center gap-2 pb-3 px-3 text-xs font-bold border-b-2 transition ${
+              activeSourceTab === 'file'
+                ? 'border-cyan-400 text-cyan-400'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <UploadCloud className="w-4 h-4" />
+            <span>Lokale Dateien hochladen</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => { setActiveSourceTab('web'); setError(null); }}
+            className={`flex items-center gap-2 pb-3 px-3 text-xs font-bold border-b-2 transition ${
+              activeSourceTab === 'web'
+                ? 'border-cyan-400 text-cyan-400'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Globe className="w-4 h-4" />
+            <span>Aus dem Web importieren</span>
+            <span className="px-1.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 text-[10px] font-semibold">MakerWorld / 3MF</span>
+          </button>
+        </div>
+
+        {/* TAB 2: WEB IMPORTER */}
+        {activeSourceTab === 'web' ? (
+          <form onSubmit={handleWebImport} className="flex-1 overflow-y-auto p-6 space-y-6">
+            {error && (
+              <div className="p-3.5 rounded-xl bg-red-950/80 border border-red-800 text-red-200 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <div className="p-5 rounded-2xl bg-gradient-to-br from-cyan-950/40 via-slate-950 to-slate-900 border border-cyan-500/20 space-y-3">
+              <div className="flex items-center gap-2.5 text-cyan-400 font-bold text-sm">
+                <Globe className="w-4 h-4" />
+                <span>Direkt von Plattformen oder per 3D-Link importieren</span>
+              </div>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Füge einen Link zu einer Modellseite auf <span className="text-slate-200 font-semibold">MakerWorld</span>, <span className="text-slate-200 font-semibold">Printables</span>, <span className="text-slate-200 font-semibold">Thingiverse</span> oder eine direkte <span className="text-slate-200 font-semibold">.stl / .3mf</span> URL ein. STLDepot lädt Titel, Beschreibung, Bild und 3D-Geometrie automatisch in deinen lokalen Vault herunter.
+              </p>
+            </div>
+
+            {/* URL Input */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2 flex items-center justify-between">
+                <span>Modell-URL oder Direkter Dateilink</span>
+                <span className="text-[10px] text-cyan-400 font-normal">HTTP / HTTPS</span>
+              </label>
+              <div className="relative">
+                <input
+                  type="url"
+                  value={webUrl}
+                  onChange={(e) => setWebUrl(e.target.value)}
+                  placeholder="https://makerworld.com/de/models/... oder https://example.com/model.stl"
+                  className="w-full pl-10 pr-4 py-3 bg-slate-950/80 border border-slate-700 focus:border-cyan-500 rounded-2xl text-xs text-slate-100 placeholder-slate-600 focus:outline-none transition shadow-inner font-mono"
+                  required
+                />
+                <Link2 className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5" />
+              </div>
+            </div>
+
+            {/* Quick Platform Presets */}
+            <div>
+              <span className="text-[11px] font-semibold text-slate-400 block mb-2">Unterstützte Plattformen:</span>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800 flex items-center gap-2 text-slate-300">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                  <span className="font-medium">MakerWorld</span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800 flex items-center gap-2 text-slate-300">
+                  <span className="w-2 h-2 rounded-full bg-orange-400" />
+                  <span className="font-medium">Printables</span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800 flex items-center gap-2 text-slate-300">
+                  <span className="w-2 h-2 rounded-full bg-blue-400" />
+                  <span className="font-medium">Thingiverse</span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800 flex items-center gap-2 text-slate-300">
+                  <span className="w-2 h-2 rounded-full bg-cyan-400" />
+                  <span className="font-medium">Direkte STL/3MF</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Basic Options */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                  Standard-Kategorie
+                </label>
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-950/80 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
+                >
+                  {categories.map((cat) => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                  Standard-Material
+                </label>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={filamentType}
+                    onChange={(e) => setFilamentType(e.target.value)}
+                    className="flex-1 px-3.5 py-2.5 bg-slate-950/80 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
+                  >
+                    {filamentOptions.map((fil) => (
+                      <option key={fil} value={fil}>{fil}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="color"
+                    value={filamentColor}
+                    onChange={(e) => setFilamentColor(e.target.value)}
+                    className="w-10 h-9 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer p-0.5"
+                    title="Filament-Farbe wählen"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Upload Progress Bar */}
+            {uploading && (
+              <div className="p-4 rounded-2xl bg-cyan-950/60 border border-cyan-800/80 space-y-2">
+                <div className="flex items-center justify-between text-xs font-semibold text-cyan-200">
+                  <span className="flex items-center gap-2">
+                    <div className="w-3.5 h-3.5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                    <span>{webStatus || 'Lade Web-Inhalte herunter...'}</span>
+                  </span>
+                </div>
+                <div className="w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-cyan-900">
+                  <div className="h-full bg-gradient-to-r from-cyan-400 via-teal-400 to-emerald-400 animate-pulse w-full" />
+                </div>
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="pt-4 border-t border-slate-800 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-semibold transition"
+              >
+                Abbrechen
+              </button>
+              <button
+                type="submit"
+                disabled={uploading || !webUrl.trim()}
+                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white text-sm font-bold shadow-lg shadow-cyan-500/25 transition disabled:opacity-50"
+              >
+                {uploading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                    <span>Importiere...</span>
+                  </>
+                ) : (
+                  <>
+                    <Globe className="w-4 h-4" />
+                    <span>Aus Web importieren</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        ) : (
+        /* TAB 1: LOCAL FILE UPLOADER */
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
           
           {error && (
@@ -959,7 +1182,9 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
           </div>
 
         </form>
+        )}
       </div>
     </div>
   );
 }
+

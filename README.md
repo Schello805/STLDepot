@@ -1,7 +1,7 @@
 # 📦 STLDepot (STL-Storage Hub)
 
 <p align="center">
-  <img src="assets/logo.png" alt="STLDepot Logo" width="180"/>
+  <img src="client/public/logo.png" alt="STLDepot Logo" width="180"/>
 </p>
 
 <p align="center">
@@ -13,42 +13,54 @@
   <a href="#-features"><img src="https://img.shields.io/badge/React-Vite-61dafb?style=for-the-badge&logo=react" alt="React"></a>
   <a href="#-features"><img src="https://img.shields.io/badge/Backend-Node%20%2B%20Express-339933?style=for-the-badge&logo=node.js" alt="Node.js"></a>
   <a href="#-features"><img src="https://img.shields.io/badge/Database-SQLite%20WAL-003B57?style=for-the-badge&logo=sqlite" alt="SQLite"></a>
+  <a href="https://github.com/Schello805/aiprintstudio"><img src="https://img.shields.io/badge/macOS%20App-AIPrintStudio-black?style=for-the-badge&logo=apple" alt="AIPrintStudio"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/Lizenz-CC%20BY--NC%204.0-orange?style=for-the-badge" alt="CC BY-NC 4.0"></a>
 </p>
 
 ---
 
+## 🍎 Begleit-App für den Mac: AIPrintStudio
+
+> [!TIP]
+> **Für macOS-Nutzer:** Schau dir auch das Projekt **[AIPrintStudio](https://github.com/Schello805/aiprintstudio)** an – die native KI-gestützte Begleit-App für 3D-Druck, Slicer-Steuerung und Filament-Management auf dem Mac!
+
+---
+
 ## 🌟 Überblick
 
-**STL-Storage Hub** ist ein schneller, eleganter und benutzerfreundlicher 3D-Modell-Tresor für Maker und 3D-Druck-Enthusiasten. Die Web-Anwendung ermöglicht das übersichtliche Verwalten, Durchsuchen und Betrachten aller deiner `.stl` und `.3mf` Dateien – inklusive 3D-Drehvorschau, automatischer Bemaßung, Volumenberechnung und One-Click-Übergabe an gängige Slicer wie **OrcaSlicer**, **Bambu Studio**, **PrusaSlicer** und **Cura**.
+**STL-Storage Hub (STLDepot)** ist ein schneller, eleganter und benutzerfreundlicher 3D-Modell-Tresor für Maker und 3D-Druck-Enthusiasten. Die Web-Anwendung ermöglicht das übersichtliche Verwalten, Durchsuchen und Betrachten aller deiner `.stl` und `.3mf` Dateien – inklusive 3D-Drehvorschau, automatischer Bemaßung, Volumenberechnung, Werkstatt-QR-Etiketten und One-Click-Übergabe an gängige Slicer wie **OrcaSlicer**, **Bambu Studio**, **PrusaSlicer** und **Cura**.
 
 ---
 
 ## 🚀 Hauptfunktionen (Features)
 
-### 🧊 1. Interaktiver 3D-WebGL-Viewer
-- **Echtzeit 3D-Rendering:** Drehen, Zoomen und Schwenken von Modellen im Browser (Desktop & Mobil).
-- **STL & 3MF Parser:** Volle Unterstützung für binäre und ASCII STL-Dateien sowie komprimierte 3MF-Pakete.
-- **Automatische Bemaßung:** Zeigt exakte Abmessungen ($X \times Y \times Z$ in mm) und berechnet das Modellvolumen in $\text{cm}^3$ sowie das geschätzte Filamentgewicht in Gramm.
-- **Druckbett-Referenz:** 256×256 mm Druckbett-Gitter (Bambu Lab / Prusa Standard) mit Bodenprojektion.
-- **Ansichten & Shader:** Wechsel zwischen Isometrischer Ansicht, Draufsicht, Frontansicht sowie Shader-Modi (*Solid*, *Gitter/Wireframe*, *Glanz/Metallic*).
-- **Live-Farbwähler:** Passe die Farbe des 3D-Modells in Echtzeit an deine gewünschte Filamentfarbe an.
-- **Snapshot als Vorschaubild:** Speichere mit einem Klick deinen aktuellen Blickwinkel als neues Vorschaubild für die Karte.
+### 🧊 1. Interaktiver 3D-WebGL-Viewer & Pro-Tools
+- **Echtzeit 3D-Rendering:** Drehen, Zoomen und Schwenken von Modellen im Browser (Desktop, Tablet & Smartphone).
+- **STL & 3MF Parser:** Volle Unterstützung für binäre und ASCII STL-Dateien sowie 3MF-Pakete (OrcaSlicer, Bambu Studio, PrusaSlicer).
+- **Punkt-zu-Punkt Messwerkzeug (Pro):** Klicke zwei beliebige Stellen am 3D-Modell an, um den exakten Abstand in **Millimetern (mm)** live zu messen.
+- **Schnitt-Ebene / Cross-Section (Pro):** Schneide Modelle interaktiv entlang der X-, Y- oder Z-Achse an, um Wandstärken und innere Hohlräume zu prüfen.
+- **Automatische Bemaßung:** Exakte Dimensionen ($X \times Y \times Z$ in mm), Volumenberechnung ($\text{cm}^3$) und geschätztes Filamentgewicht (~PLA g).
+- **Snapshot als Vorschaubild:** Speichere den aktuellen 3D-Blickwinkel als offizielles Thumbnail für das Modell.
 
-### 📁 2. Katalog & Organisation
-- **Live-Volltextsuche:** Blitzschnelle Suche nach Titel, Filamenttyp, Tags, Notizen und Beschreibungen.
-- **Kategorien & Tags:** Filter nach Kategorien (*Deko*, *Werkzeuge*, *Gaming*, *Kalibrierung*, etc.) und Schlagwörtern.
-- **Mehrteilige Baugruppen:** Gruppiere mehrere STL-Teile in einem Projekt und wechsle im 3D-Viewer nahtlos zwischen den Einzelteilen.
-- **Favoriten:** Markiere deine wichtigsten Modelle mit einem Klick auf das Herz-Symbol.
-- **Druckparameter-Dokumentation:** Speichere Infill, Düsengröße, Druckzeit, Stützen-Bedarf und Filament-Typ.
+### 🌐 2. Web-Importer (MakerWorld, Printables, Thingiverse)
+- **One-Click URL-Import:** Füge Modell-URLs von *MakerWorld*, *Printables*, *Thingiverse* oder direkte `.stl`/`.3mf` Download-Links ein.
+- **Automatischer Metadaten-Download:** Extrahiert Titel, Beschreibung, Designer-Name und lädt die 3D-Dateien direkt in deinen lokalen Tresor.
 
-### 🖨️ 3. Slicer-Integration & Downloads
+### 🏷️ 3. Werkstatt-Etiketten & QR-Code Generator
+- **Druckfertige Labels:** Generiere QR-Code-Aufkleber mit Modellname, Maßen, Filament-Informationen und Druckzeit.
+- **Ideal für Teileboxen:** Klebe das Etikett auf Schubladen, Euroboxen oder Spulen und scanne den Code mit dem Smartphone, um sofort das 3D-Modell im Browser aufzurufen.
+
+### 📱 4. PWA (Progressive Web App)
+- **Installierbar als App:** Auf iOS, Android, macOS und Windows direkt aus dem Browser als eigenständige Vollbild-App installierbar.
+- **Offline-Caching:** Schnelleres Laden und Offline-Verfügbarkeit.
+
+### 🖨️ 5. Slicer-Integration & Downloads
 - **Direktes Öffnen im Slicer:**
   - 🎋 **Bambu Studio** (`bambustudio://`)
   - 🐋 **OrcaSlicer** (`orcaslicer://`)
   - 🔶 **PrusaSlicer** (`prusaslicer://`)
   - ⚙️ **UltiMaker Cura** (`cura://`)
-- **Projekt-ZIP-Download:** Lädt alle Projektdateien zusammen mit einer automatisch generierten `Druckhinweise.txt` Datei herunter.
+- **Projekt-ZIP-Download:** Lädt alle Projektdateien zusammen mit einer formatierten `Druckhinweise.txt` Datei herunter.
 
 ### 🔄 4. Automatischer Ordner-Scanner (Watcher)
 - **Drop & Index:** Lege neue STL/3MF Dateien in den Ordner `data/watch_import` – der Hintergrund-Watcher erfasst und katalogisiert sie automatisch.

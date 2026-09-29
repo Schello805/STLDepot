@@ -105,18 +105,35 @@ export default function ScanModal({ onClose, onScanComplete, systemInfo }) {
       return name.endsWith('.stl') || name.endsWith('.3mf');
     });
 
+    if (stlFiles.length === 0) {
+      setError('Keine .stl oder .3mf Dateien im ausgewählten Ordner gefunden.');
+      return;
+    }
+
     const rootFolderName = selectedFiles[0]?.webkitRelativePath?.split('/')[0] || 'Ausgewählter Ordner';
 
-    // Group files by subfolder to analyze assemblies
+    // Group files by subfolder to analyze assemblies accurately
     const groups = {};
+    let subfolderCount = 0;
+    let rootFileCount = 0;
+
     for (const f of stlFiles) {
-      const parts = f.webkitRelativePath.split('/');
-      let gName = rootFolderName;
+      const parts = f.webkitRelativePath ? f.webkitRelativePath.split('/') : [f.name];
       if (parts.length > 2) {
-        gName = parts[parts.length - 2];
+        // Subfolder path (e.g. "Deko / Vase" or "Baugruppe1")
+        const subfolderName = parts.slice(1, -1).join(' / ');
+        if (!groups[subfolderName]) {
+          groups[subfolderName] = { isSubfolder: true, name: subfolderName, files: [] };
+          subfolderCount++;
+        }
+        groups[subfolderName].files.push(f);
+      } else {
+        // Direct root file
+        const baseTitle = f.name.replace(/\.[^/.]+$/, "");
+        const key = `__root__${baseTitle}_${rootFileCount}`;
+        groups[key] = { isSubfolder: false, name: baseTitle, files: [f] };
+        rootFileCount++;
       }
-      if (!groups[gName]) groups[gName] = [];
-      groups[gName].push(f);
     }
 
     setPickedFolderInfo({
@@ -124,85 +141,108 @@ export default function ScanModal({ onClose, onScanComplete, systemInfo }) {
       allFiles: selectedFiles,
       stlFiles: stlFiles,
       groups: groups,
-      groupCount: Object.keys(groups).length,
+      groupList: Object.values(groups),
+      subfolderCount: subfolderCount,
+      rootFileCount: rootFileCount,
+      totalProjectsWhenPreserved: Object.keys(groups).length,
       count: stlFiles.length
     });
   };
 
   // Upload the files selected through native directory picker
+  const [uploadStatusText, setUploadStatusText] = useState('');
+
   const handleUploadPickedFolder = async () => {
     if (!pickedFolderInfo || pickedFolderInfo.stlFiles.length === 0) return;
 
     setIsUploadingPickedFolder(true);
     setError(null);
-    setUploadProgress(5);
+    setUploadProgress(1);
 
     try {
       if (structureMode === 'preserve') {
-        // PRESERVE STRUCTURE: Upload each subfolder group as a single multi-part project
-        const groupKeys = Object.keys(pickedFolderInfo.groups);
-        let completed = 0;
+        // PRESERVE STRUCTURE: Upload each subfolder group as a multi-part project and root files as individual projects
+        const groupsToUpload = pickedFolderInfo.groupList;
+        const total = groupsToUpload.length;
+        let successCount = 0;
 
-        for (const gName of groupKeys) {
-          const filesInGroup = pickedFolderInfo.groups[gName];
+        for (let i = 0; i < total; i++) {
+          const grp = groupsToUpload[i];
+          const formattedTitle = grp.name.replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+          setUploadStatusText(`(${i + 1}/${total}) Speichere Projekt: "${formattedTitle}" (${grp.files.length} Dateien)...`);
+
           const formData = new FormData();
-          const formattedTitle = gName.replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-
           formData.append('title', formattedTitle);
-          formData.append('category', groupKeys.length > 1 ? 'Baugruppen' : 'Deko & Haushalt');
+          formData.append('category', grp.isSubfolder ? 'Baugruppen' : 'Deko & Haushalt');
           formData.append('author', 'Michael Schellenberger');
-          formData.append('description', `Importiert aus Ordner "${gName}" (${filesInGroup.length} Teile)`);
+          formData.append('description', grp.isSubfolder 
+            ? `Baugruppe aus Ordner "${grp.name}" (${grp.files.length} Teile)` 
+            : `Einzelmodell aus "${pickedFolderInfo.name}"`);
           formData.append('filament_color', '#38bdf8');
           formData.append('filament_type', 'PLA');
 
-          for (const file of filesInGroup) {
+          for (const file of grp.files) {
             formData.append('files', file);
           }
 
-          await fetch('/api/models', {
-            method: 'POST',
-            body: formData
-          });
+          try {
+            const res = await fetch('/api/models', {
+              method: 'POST',
+              body: formData
+            });
+            if (res.ok) successCount++;
+          } catch (itemErr) {
+            console.error('Failed to upload project:', formattedTitle, itemErr);
+          }
 
-          completed++;
-          setUploadProgress(Math.round((completed / groupKeys.length) * 100));
+          setUploadProgress(Math.round(((i + 1) / total) * 100));
         }
 
         confetti({ particleCount: 70, spread: 80 });
         setResult({
-          message: `${groupKeys.length} Projekte (${pickedFolderInfo.stlFiles.length} 3D-Dateien) mit erhaltener Ordnerstruktur importiert!`,
-          added: groupKeys.length,
+          message: `${successCount} Projekte (${pickedFolderInfo.stlFiles.length} Dateien) erfolgreich mit erhaltener Ordnerstruktur importiert!`,
+          added: successCount,
           errors: []
         });
       } else {
         // FLAT: Upload each STL as an individual project
-        for (let i = 0; i < pickedFolderInfo.stlFiles.length; i++) {
-          const file = pickedFolderInfo.stlFiles[i];
-          const formData = new FormData();
-          const baseTitle = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        const total = pickedFolderInfo.stlFiles.length;
+        let successCount = 0;
 
+        for (let i = 0; i < total; i++) {
+          const file = pickedFolderInfo.stlFiles[i];
+          const baseTitle = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+          setUploadStatusText(`(${i + 1}/${total}) Speichere: "${baseTitle}"...`);
+
+          const formData = new FormData();
           formData.append('title', baseTitle);
           formData.append('category', 'Deko & Haushalt');
           formData.append('author', 'Michael Schellenberger');
           formData.append('files', file);
 
-          await fetch('/api/models', {
-            method: 'POST',
-            body: formData
-          });
+          try {
+            const res = await fetch('/api/models', {
+              method: 'POST',
+              body: formData
+            });
+            if (res.ok) successCount++;
+          } catch (itemErr) {
+            console.error('Failed to upload file:', file.name, itemErr);
+          }
 
-          setUploadProgress(Math.round(((i + 1) / pickedFolderInfo.stlFiles.length) * 100));
+          setUploadProgress(Math.round(((i + 1) / total) * 100));
         }
 
         confetti({ particleCount: 70, spread: 80 });
         setResult({
-          message: `${pickedFolderInfo.stlFiles.length} einzelne Modelle erfolgreich im Hauptkatalog angelegt!`,
-          added: pickedFolderInfo.stlFiles.length,
+          message: `${successCount} einzelne 3D-Modelle erfolgreich im Hauptkatalog angelegt!`,
+          added: successCount,
           errors: []
         });
       }
 
       setPickedFolderInfo(null);
+      setUploadStatusText('');
       onScanComplete();
     } catch (err) {
       setError('Fehler beim Importieren des Ordners');
@@ -363,38 +403,58 @@ export default function ScanModal({ onClose, onScanComplete, systemInfo }) {
 
             {/* If folder picked */}
             {pickedFolderInfo && (
-              <div className="p-4 rounded-xl bg-amber-950/40 border border-amber-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs animate-in fade-in">
-                <div>
-                  <div className="font-semibold text-amber-200 flex items-center gap-1.5">
-                    <FileBox className="w-4 h-4 text-amber-400" />
-                    <span>Ordner: "{pickedFolderInfo.name}"</span>
+              <div className="p-4 rounded-xl bg-amber-950/40 border border-amber-800/60 space-y-3 text-xs animate-in fade-in">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <div className="font-semibold text-amber-200 flex items-center gap-1.5 text-sm">
+                      <FileBox className="w-4 h-4 text-amber-400" />
+                      <span>Ordner: "{pickedFolderInfo.name}"</span>
+                    </div>
+                    <p className="text-xs text-amber-300/80 mt-1">
+                      <strong>{pickedFolderInfo.count}</strong> 3D-Dateien ({pickedFolderInfo.subfolderCount} Unterordner, {pickedFolderInfo.rootFileCount} Hauptdateien).
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Modus: {structureMode === 'preserve' 
+                        ? `📁 ${pickedFolderInfo.totalProjectsWhenPreserved} Projekte (Baugruppen erhalten)` 
+                        : `📄 ${pickedFolderInfo.count} Einzelmodelle im Katalog`}
+                    </p>
                   </div>
-                  <p className="text-[11px] text-amber-300/80 mt-0.5">
-                    {pickedFolderInfo.count} STL/3MF Dateien gefunden 
-                    {structureMode === 'preserve' 
-                      ? ` (wird in ${pickedFolderInfo.groupCount} Baugruppen aufgeteilt)` 
-                      : ` (wird als ${pickedFolderInfo.count} Einzelmodelle importiert)`}
-                  </p>
+
+                  <button
+                    type="button"
+                    onClick={handleUploadPickedFolder}
+                    disabled={isUploadingPickedFolder || pickedFolderInfo.count === 0}
+                    className="flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition disabled:opacity-50 shadow-md shrink-0"
+                  >
+                    {isUploadingPickedFolder ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                        <span>Importiere ({uploadProgress}%)...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-3.5 h-3.5 stroke-[3]" />
+                        <span>{pickedFolderInfo.count} Dateien jetzt importieren</span>
+                      </>
+                    )}
+                  </button>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={handleUploadPickedFolder}
-                  disabled={isUploadingPickedFolder || pickedFolderInfo.count === 0}
-                  className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition disabled:opacity-50 shadow-md"
-                >
-                  {isUploadingPickedFolder ? (
-                    <>
-                      <div className="w-3.5 h-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
-                      <span>Importiere ({uploadProgress}%)...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Check className="w-3.5 h-3.5 stroke-[3]" />
-                      <span>{pickedFolderInfo.count} Dateien jetzt importieren</span>
-                    </>
-                  )}
-                </button>
+                {/* Live Progress bar during upload */}
+                {isUploadingPickedFolder && (
+                  <div className="space-y-1.5 pt-2 border-t border-amber-800/40">
+                    <div className="flex justify-between items-center text-[11px] text-amber-200">
+                      <span className="truncate max-w-md">{uploadStatusText || 'Lade Dateien hoch...'}</span>
+                      <span className="font-mono font-bold">{uploadProgress}%</span>
+                    </div>
+                    <div className="w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-amber-900/60">
+                      <div 
+                        className="h-full bg-gradient-to-r from-amber-500 via-yellow-400 to-emerald-400 transition-all duration-200" 
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

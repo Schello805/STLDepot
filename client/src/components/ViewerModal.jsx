@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import ThreeCanvas from './ThreeCanvas';
+import LabelModal from './LabelModal';
 import { 
   X, 
   Download, 
@@ -16,7 +17,8 @@ import {
   FileText,
   Weight,
   Sparkles,
-  Heart
+  Heart,
+  QrCode
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { generateThumbnailSnapshot } from '../utils/threeUtils';
@@ -42,6 +44,7 @@ export default function ViewerModal({
   const [currentGeometry, setCurrentGeometry] = useState(null);
   const [savingThumb, setSavingThumb] = useState(false);
   const [thumbSavedSuccess, setThumbSavedSuccess] = useState(false);
+  const [showLabelModal, setShowLabelModal] = useState(false);
 
   useEffect(() => {
     if (modelFiles.length > 0 && !selectedFile) {
@@ -120,6 +123,14 @@ export default function ViewerModal({
             >
               <Printer className="w-4 h-4" />
               <span>In Slicer öffnen</span>
+            </button>
+            <button
+              onClick={() => setShowLabelModal(true)}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition"
+              title="Druckfertiges Werkstatt-Etikett mit QR-Code für Boxen & Spulen generieren"
+            >
+              <QrCode className="w-4 h-4 text-cyan-400" />
+              <span className="hidden md:inline">QR-Etikett</span>
             </button>
             <button
               onClick={handleDownloadZip}
@@ -365,6 +376,13 @@ export default function ViewerModal({
         </div>
 
       </div>
+
+      {showLabelModal && (
+        <LabelModal 
+          model={model} 
+          onClose={() => setShowLabelModal(false)} 
+        />
+      )}
     </div>
   );
 }

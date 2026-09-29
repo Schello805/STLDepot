@@ -1,0 +1,23 @@
+{
+  "name": "STL-Storage 3D Vault",
+  "short_name": "STL-Storage",
+  "description": "Dein privater 3D-Druck-Katalog für STL und 3MF Dateien mit WebGL 3D-Vorschau und Slicer-Anbindung",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#0284c7",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

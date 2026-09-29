@@ -50,12 +50,17 @@ export default function Footer({ systemInfo }) {
             <span className="text-cyan-400 font-semibold" title="Dynamische Revisionsnummer">Rev. {revision}</span>
           </div>
 
-          {/* GitHub Link with Icon & Stats */}
-          <div className="flex items-center gap-4">
-            <div className="text-right hidden lg:block text-xs text-slate-500">
-              <div>{totalProjects} Modelle im Tresor</div>
-              <div className="text-[11px] font-mono">{storageFormatted} belegt</div>
-            </div>
+          {/* GitHub & Mac App Links */}
+          <div className="flex flex-wrap items-center gap-3">
+            <a
+              href="https://github.com/Schello805/aiprintstudio"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-slate-900 to-slate-800 hover:from-slate-800 hover:to-slate-700 text-slate-100 text-xs font-semibold border border-cyan-500/30 hover:border-cyan-400 shadow-md transition group"
+            >
+              <span className="text-base">🍎</span>
+              <span>Mac App: <strong className="text-cyan-400 group-hover:text-cyan-300">AIPrintStudio</strong></span>
+            </a>
 
             <a
               href={githubUrl}

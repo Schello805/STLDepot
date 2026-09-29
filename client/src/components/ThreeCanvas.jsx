@@ -12,7 +12,11 @@ import {
   Sun, 
   Palette, 
   Ruler,
-  Sliders
+  Sliders,
+  Scissors,
+  Crosshair,
+  Trash2,
+  Check
 } from 'lucide-react';
 
 export default function ThreeCanvas({ 
@@ -31,6 +35,7 @@ export default function ThreeCanvas({
   const gridRef = useRef(null);
   const bboxHelperRef = useRef(null);
   const animationFrameRef = useRef(null);
+  const measureGroupRef = useRef(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -42,9 +47,19 @@ export default function ThreeCanvas({
   const [stats, setStats] = useState(null);
   const bedMeshRef = useRef(null);
 
+  // Pro Tools: Clipping (Schnitt-Ebene) & Point-to-Point Measurement
+  const [clippingActive, setClippingActive] = useState(false);
+  const [clippingAxis, setClippingAxis] = useState('y'); // 'x', 'y', 'z'
+  const [clippingValue, setClippingValue] = useState(50); // percentage 0-100
+  const clipPlaneRef = useRef(new THREE.Plane(new THREE.Vector3(0, -1, 0), 100));
+
+  const [measureMode, setMeasureMode] = useState(false);
+  const [measurePoints, setMeasurePoints] = useState([]); // [{x, y, z}]
+  const [measureDistance, setMeasureDistance] = useState(null);
+
   // Drag interaction states
   const isDraggingRef = useRef(false);
-  const previousMousePositionRef = useRef({ x: e => {}, y: 0 });
+  const previousMousePositionRef = useRef({ x: 0, y: 0 });
   const isPanningRef = useRef(false);
   const targetLookAtRef = useRef(new THREE.Vector3(0, 10, 0));
 
@@ -63,18 +78,24 @@ export default function ThreeCanvas({
     const scene = new THREE.Scene();
     sceneRef.current = scene;
 
+    // Measure helper group
+    const measureGroup = new THREE.Group();
+    scene.add(measureGroup);
+    measureGroupRef.current = measureGroup;
+
     // Camera
     const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 2000);
     camera.position.set(100, 90, 120);
     camera.lookAt(targetLookAtRef.current);
     cameraRef.current = camera;
 
-    // Renderer
+    // Renderer with Local Clipping enabled
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.localClippingEnabled = true;
     container.innerHTML = '';
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
@@ -236,12 +257,38 @@ export default function ThreeCanvas({
     };
   }, [fileUrl, fileType]);
 
-  // Update material / color
+  // Update material / color & clipping
   useEffect(() => {
-    if (meshRef.current) {
-      meshRef.current.material = createMaterial(materialMode, color);
+    if (!meshRef.current) return;
+
+    if (clippingActive) {
+      const bbox = new THREE.Box3().setFromObject(meshRef.current);
+      const size = new THREE.Vector3();
+      const center = new THREE.Vector3();
+      bbox.getSize(size);
+      bbox.getCenter(center);
+
+      const normal = new THREE.Vector3();
+      let constant = 0;
+      const fraction = (clippingValue - 50) / 50; // -1 to 1
+
+      if (clippingAxis === 'x') {
+        normal.set(-1, 0, 0);
+        constant = center.x + (size.x / 2) * fraction;
+      } else if (clippingAxis === 'y') {
+        normal.set(0, -1, 0);
+        constant = center.y + (size.y / 2) * fraction;
+      } else {
+        normal.set(0, 0, -1);
+        constant = center.z + (size.z / 2) * fraction;
+      }
+
+      clipPlaneRef.current.normal.copy(normal);
+      clipPlaneRef.current.constant = constant;
     }
-  }, [color, materialMode]);
+
+    meshRef.current.material = createMaterial(materialMode, color, clippingActive);
+  }, [color, materialMode, clippingActive, clippingAxis, clippingValue]);
 
   // Update Grid / BBox visibility
   useEffect(() => {
@@ -250,27 +297,78 @@ export default function ThreeCanvas({
     if (bboxHelperRef.current) bboxHelperRef.current.visible = showBBox;
   }, [showGrid, showBBox]);
 
-  function createMaterial(mode, col) {
+  function createMaterial(mode, col, isClipping = false) {
+    const planes = isClipping ? [clipPlaneRef.current] : [];
+    let mat;
     switch (mode) {
       case 'wireframe':
-        return new THREE.MeshBasicMaterial({ color: col, wireframe: true });
+        mat = new THREE.MeshBasicMaterial({ color: col, wireframe: true });
+        break;
       case 'normal':
-        return new THREE.MeshNormalMaterial();
+        mat = new THREE.MeshNormalMaterial({ side: THREE.DoubleSide });
+        break;
       case 'metallic':
-        return new THREE.MeshStandardMaterial({
+        mat = new THREE.MeshStandardMaterial({
           color: col,
           metalness: 0.85,
-          roughness: 0.2
+          roughness: 0.2,
+          side: THREE.DoubleSide
         });
+        break;
       case 'standard':
       default:
-        return new THREE.MeshStandardMaterial({
+        mat = new THREE.MeshStandardMaterial({
           color: col,
           metalness: 0.15,
-          roughness: 0.45
+          roughness: 0.45,
+          side: THREE.DoubleSide
         });
+        break;
     }
+    mat.clippingPlanes = planes;
+    mat.clipShadows = true;
+    return mat;
   }
+
+  // Point-to-Point Measurement Helpers
+  const addMeasurePoint = (pt) => {
+    if (!measureGroupRef.current) return;
+    const newPoints = [...measurePoints, pt];
+    setMeasurePoints(newPoints);
+
+    // Add sphere marker
+    const sphereGeo = new THREE.SphereGeometry(1.2, 16, 16);
+    const sphereMat = new THREE.MeshBasicMaterial({ color: newPoints.length === 1 ? 0x06b6d4 : 0x22c55e });
+    const marker = new THREE.Mesh(sphereGeo, sphereMat);
+    marker.position.copy(pt);
+    measureGroupRef.current.add(marker);
+
+    if (newPoints.length === 2) {
+      const p1 = newPoints[0];
+      const p2 = newPoints[1];
+      const dist = p1.distanceTo(p2);
+      setMeasureDistance(dist.toFixed(2));
+
+      // Draw line between points
+      const lineGeo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+      const lineMat = new THREE.LineBasicMaterial({ color: 0x22c55e, linewidth: 3 });
+      const line = new THREE.Line(lineGeo, lineMat);
+      measureGroupRef.current.add(line);
+    }
+  };
+
+  const clearMeasurement = () => {
+    setMeasurePoints([]);
+    setMeasureDistance(null);
+    if (measureGroupRef.current) {
+      while (measureGroupRef.current.children.length > 0) {
+        const obj = measureGroupRef.current.children[0];
+        measureGroupRef.current.remove(obj);
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) obj.material.dispose();
+      }
+    }
+  };
 
   // Camera presets
   const setCameraView = (view) => {
@@ -422,6 +520,31 @@ export default function ThreeCanvas({
     touchStartDistRef.current = 0;
   };
 
+  // Raycast click for Measurement tool
+  const handleCanvasClick = (e) => {
+    if (!measureMode || !meshRef.current || !cameraRef.current || !containerRef.current) return;
+
+    const rect = containerRef.current.getBoundingClientRect();
+    const mouse = new THREE.Vector2(
+      ((e.clientX - rect.left) / rect.width) * 2 - 1,
+      -((e.clientY - rect.top) / rect.height) * 2 + 1
+    );
+
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(mouse, cameraRef.current);
+    const intersects = raycaster.intersectObject(meshRef.current, false);
+
+    if (intersects.length > 0) {
+      const hitPoint = intersects[0].point;
+      if (measurePoints.length >= 2) {
+        clearMeasurement();
+        addMeasurePoint(hitPoint);
+      } else {
+        addMeasurePoint(hitPoint);
+      }
+    }
+  };
+
   const filamentColors = [
     { name: 'Cyan Blau', hex: '#38bdf8' },
     { name: 'Maker Orange', hex: '#f97316' },
@@ -441,12 +564,13 @@ export default function ThreeCanvas({
       {/* 3D Canvas Viewport */}
       <div 
         ref={containerRef}
-        className="w-full h-full cursor-grab active:cursor-grabbing flex-1"
+        className={`w-full h-full flex-1 ${measureMode ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}`}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
         onWheel={handleWheel}
+        onClick={handleCanvasClick}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -472,63 +596,144 @@ export default function ThreeCanvas({
 
       {/* Top Floating Controls Bar */}
       {interactive && !loading && !error && (
-        <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none z-10">
+        <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none z-10 flex-wrap gap-2">
           {/* Quick Camera Presets */}
-          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-900/80 backdrop-blur-md border border-slate-700/60 pointer-events-auto shadow-lg">
+          <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-900/80 backdrop-blur-md border border-slate-700/60 pointer-events-auto shadow-lg text-[11px]">
             <button 
               onClick={() => setCameraView('iso')} 
               title="Isometrische Ansicht" 
-              className="px-2.5 py-1 text-xs font-medium rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition"
+              className="px-2 py-0.5 font-medium rounded text-slate-300 hover:text-white hover:bg-slate-800 transition"
             >
               ISO
             </button>
             <button 
               onClick={() => setCameraView('top')} 
               title="Draufsicht (Top)" 
-              className="px-2.5 py-1 text-xs font-medium rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition"
+              className="px-2 py-0.5 font-medium rounded text-slate-300 hover:text-white hover:bg-slate-800 transition"
             >
               Drauf
             </button>
             <button 
               onClick={() => setCameraView('front')} 
               title="Vorderansicht (Front)" 
-              className="px-2.5 py-1 text-xs font-medium rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition"
+              className="px-2 py-0.5 font-medium rounded text-slate-300 hover:text-white hover:bg-slate-800 transition"
             >
               Vorne
             </button>
             <button 
               onClick={() => setCameraView('right')} 
               title="Seitenansicht (Rechts)" 
-              className="px-2.5 py-1 text-xs font-medium rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition"
+              className="px-2 py-0.5 font-medium rounded text-slate-300 hover:text-white hover:bg-slate-800 transition"
             >
               Seite
             </button>
           </div>
 
-          {/* Quick Toggles */}
+          {/* Pro Tools Toggles: Auto-Rotate, Grid, BBox, Schnitt-Ebene (Clipping), Messwerkzeug */}
           <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-900/80 backdrop-blur-md border border-slate-700/60 pointer-events-auto shadow-lg">
             <button
               onClick={() => setAutoRotate(!autoRotate)}
               title={autoRotate ? "Auto-Drehung anhalten" : "Auto-Drehung starten"}
               className={`p-1.5 rounded-lg transition ${autoRotate ? 'bg-cyan-500/20 text-cyan-400' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
             >
-              <RotateCw className={`w-4 h-4 ${autoRotate ? 'animate-spin' : ''}`} />
+              <RotateCw className={`w-3.5 h-3.5 ${autoRotate ? 'animate-spin' : ''}`} />
             </button>
             <button
               onClick={() => setShowGrid(!showGrid)}
               title="Druckbett Gitter an/aus"
               className={`p-1.5 rounded-lg transition ${showGrid ? 'bg-cyan-500/20 text-cyan-400' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
             >
-              <Layers className="w-4 h-4" />
+              <Layers className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={() => setShowBBox(!showBBox)}
               title="Bemaßungs-Rahmen an/aus"
               className={`p-1.5 rounded-lg transition ${showBBox ? 'bg-cyan-500/20 text-cyan-400' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
             >
-              <Ruler className="w-4 h-4" />
+              <Ruler className="w-3.5 h-3.5" />
+            </button>
+            
+            {/* Schnitt-Ebene (Cross-Section) */}
+            <button
+              onClick={() => setClippingActive(!clippingActive)}
+              title="Schnitt-Ebene (Cross-Section)"
+              className={`p-1.5 rounded-lg transition ${clippingActive ? 'bg-amber-500/25 text-amber-400 border border-amber-500/40' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+            >
+              <Scissors className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Punkt-zu-Punkt Messen */}
+            <button
+              onClick={() => {
+                const next = !measureMode;
+                setMeasureMode(next);
+                if (!next) clearMeasurement();
+              }}
+              title="Punkt-zu-Punkt Messwerkzeug (2 Punkte anklicken)"
+              className={`p-1.5 rounded-lg transition ${measureMode ? 'bg-emerald-500/25 text-emerald-400 border border-emerald-500/40' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+            >
+              <Crosshair className="w-3.5 h-3.5" />
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Schnitt-Ebene (Clipping) Floating Slider Controls */}
+      {interactive && clippingActive && !loading && (
+        <div className="absolute top-14 right-3 p-3 rounded-2xl bg-slate-900/90 backdrop-blur-md border border-amber-500/40 text-xs text-slate-200 z-10 shadow-xl space-y-2 animate-in fade-in duration-150 pointer-events-auto">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-semibold text-amber-300 flex items-center gap-1 text-[11px]">
+              <Scissors className="w-3 h-3" /> Schnitt-Ebene
+            </span>
+            <div className="flex items-center gap-1">
+              {['x', 'y', 'z'].map((axis) => (
+                <button
+                  key={axis}
+                  onClick={() => setClippingAxis(axis)}
+                  className={`px-1.5 py-0.5 uppercase text-[10px] font-bold rounded ${clippingAxis === axis ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                >
+                  {axis}
+                </button>
+              ))}
+            </div>
+          </div>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={clippingValue}
+            onChange={(e) => setClippingValue(parseInt(e.target.value, 10))}
+            className="w-36 accent-amber-500 cursor-pointer"
+          />
+        </div>
+      )}
+
+      {/* Punkt-zu-Punkt Messwerkzeug Floating Info Badge */}
+      {interactive && measureMode && !loading && (
+        <div className="absolute top-14 left-3 p-3 rounded-2xl bg-slate-900/95 backdrop-blur-md border border-emerald-500/40 text-xs text-slate-200 z-10 shadow-xl space-y-1.5 animate-in fade-in duration-150 pointer-events-auto">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-semibold text-emerald-300 flex items-center gap-1 text-[11px]">
+              <Crosshair className="w-3.5 h-3.5" /> Messwerkzeug
+            </span>
+            {measurePoints.length > 0 && (
+              <button
+                onClick={clearMeasurement}
+                className="text-[10px] text-slate-400 hover:text-red-400 flex items-center gap-0.5"
+                title="Messung zurücksetzen"
+              >
+                <Trash2 className="w-3 h-3" /> Reset
+              </button>
+            )}
+          </div>
+          <p className="text-[10px] text-slate-400">
+            {measurePoints.length === 0 && '👉 Klicke Punkt 1 auf dem Modell an'}
+            {measurePoints.length === 1 && '👉 Klicke Punkt 2 auf dem Modell an'}
+            {measurePoints.length === 2 && (
+              <span className="text-emerald-400 font-bold font-mono text-xs">
+                📏 Abstand: {measureDistance} mm
+              </span>
+            )}
+          </p>
         </div>
       )}
 
@@ -572,8 +777,8 @@ export default function ThreeCanvas({
         </div>
       )}
 
-      {/* Live Dimension HUD overlay */}
-      {stats && !loading && !error && (
+      {/* Live Dimension HUD overlay (only if not measuring to prevent clutter) */}
+      {stats && !loading && !error && !measureMode && !clippingActive && (
         <div className="absolute top-14 left-3 px-2.5 py-1.5 rounded-lg bg-slate-950/75 backdrop-blur-md border border-slate-800 text-[11px] font-mono text-cyan-300/90 pointer-events-none shadow-md space-y-0.5">
           <div className="flex items-center gap-1.5 font-semibold text-slate-300">
             <Box className="w-3 h-3 text-cyan-400" />

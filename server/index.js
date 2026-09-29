@@ -7,6 +7,7 @@ import { initDB, THUMBNAILS_DIR, MODELS_DIR } from './db.js';
 import { startWatchService } from './scanner.js';
 import modelsRouter from './routes/models.js';
 import systemRouter from './routes/system.js';
+import webImportRouter from './routes/webImport.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -183,6 +184,7 @@ app.use('/api/thumbnails', express.static(THUMBNAILS_DIR));
 // API Routes
 app.use('/api/models', modelsRouter);
 app.use('/api/system', systemRouter);
+app.use('/api/web-import', webImportRouter);
 
 // Serve Client in production
 const clientDist = path.join(__dirname, '..', 'client', 'dist');
