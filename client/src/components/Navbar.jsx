@@ -9,7 +9,9 @@ import {
   Sparkles,
   Sun,
   Moon,
-  HardDrive
+  HardDrive,
+  Coins,
+  Settings
 } from 'lucide-react';
 
 export default function Navbar({ 
@@ -22,6 +24,7 @@ export default function Navbar({
   setOnlyFavorites,
   onOpenUpload,
   onOpenScanner,
+  onOpenSettings,
   systemInfo,
   darkMode,
   setDarkMode,
@@ -117,6 +120,16 @@ export default function Navbar({
                 <span>{backgroundUpload.statusText}</span>
               </div>
             ) : null}
+
+            {/* Material Pricing & Cost Settings */}
+            <button
+              onClick={onOpenSettings}
+              title="Materialpreise & Druckkosten konfigurieren"
+              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-emerald-300 hover:text-emerald-200 text-xs sm:text-sm font-medium border border-slate-700/60 hover:border-emerald-500/50 transition shadow-sm active:scale-95"
+            >
+              <Coins className="w-4 h-4 text-emerald-400" />
+              <span className="hidden lg:inline">Materialpreise</span>
+            </button>
 
             {/* Folder Scanner Trigger */}
             <button

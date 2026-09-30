@@ -3,6 +3,7 @@ import path from 'path';
 import chokidar from 'chokidar';
 import crypto from 'crypto';
 import { db, MODELS_DIR, WATCH_DIR } from './db.js';
+import { updateProjectGeometry } from './utils/geometryCalculator.js';
 
 let watcher = null;
 
@@ -141,6 +142,7 @@ function importMultiPartProjectFromDisk(fileList, folderTitle, groupKey, duplica
       }
 
       db.prepare(`UPDATE projects SET updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(projectId);
+      updateProjectGeometry(projectId).catch(() => {});
       return 'overwritten';
     }
   }
@@ -188,6 +190,7 @@ function importMultiPartProjectFromDisk(fileList, folderTitle, groupKey, duplica
     );
   }
 
+  updateProjectGeometry(projectId).catch(() => {});
   console.log(`[Scanner] Auto-imported multi-part project "${folderTitle}" with ${fileList.length} files`);
   return 'added';
 }
@@ -247,6 +250,7 @@ function importSingleFileFromDisk(sourcePath, originalName, ext, duplicateAction
       );
 
       db.prepare(`UPDATE projects SET updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(projectId);
+      updateProjectGeometry(projectId).catch(() => {});
       return 'overwritten';
     }
   }
@@ -292,6 +296,7 @@ function importSingleFileFromDisk(sourcePath, originalName, ext, duplicateAction
     ext.replace('.', '')
   );
 
+  updateProjectGeometry(projectId).catch(() => {});
   console.log(`[Scanner] Auto-imported 3D model: ${originalName} (ID: ${projectId})`);
   return 'added';
 }

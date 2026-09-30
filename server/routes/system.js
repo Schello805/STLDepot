@@ -172,4 +172,131 @@ router.post('/open-folder', (req, res) => {
   }
 });
 
+// GET /api/system/settings - Retrieve material pricing and configuration
+router.get('/settings', (req, res) => {
+  try {
+    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('material_settings');
+    let settings = null;
+    if (row && row.value) {
+      try { settings = JSON.parse(row.value); } catch {}
+    }
+    if (!settings) {
+      settings = {
+        materials: [
+          { id: 'PLA', name: 'PLA', density: 1.24, price_per_kg: 19.99, color: '#38bdf8' },
+          { id: 'PETG', name: 'PETG', density: 1.27, price_per_kg: 21.99, color: '#10b981' },
+          { id: 'ABS', name: 'ABS', density: 1.04, price_per_kg: 22.99, color: '#f59e0b' },
+          { id: 'ASA', name: 'ASA', density: 1.07, price_per_kg: 24.99, color: '#ef4444' },
+          { id: 'TPU', name: 'TPU', density: 1.21, price_per_kg: 29.99, color: '#8b5cf6' }
+        ],
+        infill_factor: 0.35,
+        currency: '€'
+      };
+    }
+    res.json({ success: true, settings });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// PUT /api/system/settings - Save material pricing and configuration
+router.put('/settings', (req, res) => {
+  try {
+    const newSettings = req.body;
+    if (!newSettings || !Array.isArray(newSettings.materials)) {
+      return res.status(400).json({ success: false, error: 'Ungültiges Einstellungsformat' });
+    }
+
+    db.prepare(`
+      INSERT INTO settings (key, value) VALUES (?, ?)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    `).run('material_settings', JSON.stringify(newSettings));
+
+    // Update weights of existing projects based on new densities/infill factor
+    try {
+      const infillFactor = typeof newSettings.infill_factor === 'number' ? newSettings.infill_factor : 0.35;
+      const matMap = new Map();
+      for (const m of newSettings.materials) {
+        matMap.set((m.id || m.name).toUpperCase(), m.density || 1.24);
+      }
+
+      const projects = db.prepare('SELECT id, filament_type, volume_cm3 FROM projects WHERE volume_cm3 > 0').all();
+      const updateStmt = db.prepare('UPDATE projects SET weight_grams = ? WHERE id = ?');
+      for (const p of projects) {
+        const density = matMap.get((p.filament_type || 'PLA').toUpperCase()) || 1.24;
+        const newWeight = parseFloat((p.volume_cm3 * density * infillFactor).toFixed(1));
+        updateStmt.run(newWeight, p.id);
+      }
+    } catch (e) {
+      console.warn('Could not update project weights on settings save:', e.message);
+    }
+
+    res.json({ success: true, message: 'Einstellungen erfolgreich gespeichert', settings: newSettings });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/system/recalculate-weights - Calculate/refresh weights for all models
+router.post('/recalculate-weights', async (req, res) => {
+  try {
+    const { calculateFileGeometry } = await import('../utils/geometryCalculator.js');
+
+    // Get current material settings
+    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('material_settings');
+    let settings = { materials: [{ id: 'PLA', density: 1.24 }], infill_factor: 0.35 };
+    if (row && row.value) {
+      try { settings = JSON.parse(row.value); } catch {}
+    }
+
+    const matMap = new Map();
+    for (const m of settings.materials || []) {
+      matMap.set((m.id || m.name).toUpperCase(), m.density || 1.24);
+    }
+    const infillFactor = typeof settings.infill_factor === 'number' ? settings.infill_factor : 0.35;
+
+    const projects = db.prepare('SELECT id, filament_type, volume_cm3, weight_grams FROM projects').all();
+    let updatedCount = 0;
+
+    for (const proj of projects) {
+      const files = db.prepare('SELECT * FROM project_files WHERE project_id = ?').all(proj.id);
+      let totalVolume = 0;
+      let totalWeight = 0;
+
+      const density = matMap.get((proj.filament_type || 'PLA').toUpperCase()) || 1.24;
+
+      for (const f of files) {
+        if (!f.file_path || !fs.existsSync(f.file_path)) continue;
+        const geo = await calculateFileGeometry(f.file_path, proj.filament_type || 'PLA', density, infillFactor);
+        
+        if (geo.volumeCm3 > 0 || geo.weightGrams > 0) {
+          totalVolume += geo.volumeCm3;
+          totalWeight += geo.weightGrams;
+
+          db.prepare(`
+            UPDATE project_files 
+            SET volume_cm3 = ?, triangle_count = ? 
+            WHERE id = ?
+          `).run(geo.volumeCm3, geo.triangles, f.id);
+        }
+      }
+
+      if (totalVolume > 0 || totalWeight > 0) {
+        db.prepare(`
+          UPDATE projects 
+          SET volume_cm3 = ?, weight_grams = ? 
+          WHERE id = ?
+        `).run(parseFloat(totalVolume.toFixed(2)), parseFloat(totalWeight.toFixed(1)), proj.id);
+        updatedCount++;
+      }
+    }
+
+    res.json({ success: true, message: `Berechnung abgeschlossen für ${updatedCount} Modelle.`, updated: updatedCount });
+  } catch (err) {
+    console.error('Error recalculating weights:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 export default router;
+

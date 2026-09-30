@@ -14,10 +14,12 @@ import {
   Tag,
   Share2,
   Printer,
-  Check
+  Check,
+  Coins
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { parseSTL, parse3MF, generateThumbnailSnapshot, extract3MFThumbnail } from '../utils/threeUtils';
+import { calculateModelCost } from '../utils/costCalculator';
 
 export default function ModelCard({ 
   model, 
@@ -28,11 +30,14 @@ export default function ModelCard({
   onEdit,
   selectionMode = false,
   isSelected = false,
-  onToggleSelect
+  onToggleSelect,
+  materialSettings,
+  onOpenSettings
 }) {
   const [isHovered, setIsHovered] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [dynamicThumb, setDynamicThumb] = useState(model.thumbnail_url || null);
+  const costInfo = calculateModelCost(model, materialSettings);
   const [loadingThumb, setLoadingThumb] = useState(!model.thumbnail_url);
 
   // Format file size
@@ -269,9 +274,22 @@ export default function ModelCard({
             <span className="font-semibold text-slate-100">{model.filament_type || 'PLA'}</span>
           </div>
 
-          {/* Infill % */}
-          <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-800/90 border border-slate-700 text-slate-300 shadow-sm">
-            <span>{model.infill_percentage}% Infill</span>
+          {/* Print Cost & Weight (Replaces Infill) */}
+          <div 
+            onClick={(e) => {
+              if (onOpenSettings) {
+                e.stopPropagation();
+                onOpenSettings();
+              }
+            }}
+            title={costInfo?.weight > 0 ? `Materialkosten: ${costInfo.price} (~${costInfo.weight}g ${costInfo.materialName} @ ${costInfo.pricePerKg} ${costInfo.currency}/kg). Klicke zum Anpassen der Preise.` : 'Druckkosten (Klicke für Einstellungen)'}
+            className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-950/70 border border-emerald-500/40 text-emerald-300 shadow-sm font-semibold hover:bg-emerald-900/80 hover:border-emerald-400 transition cursor-pointer"
+          >
+            <Coins className="w-3 h-3 text-emerald-400 shrink-0" />
+            <span className="font-bold text-emerald-200">{costInfo?.price || '-- €'}</span>
+            {costInfo?.weight > 0 && (
+              <span className="text-[10px] text-emerald-400/80 font-normal">({costInfo.weightFormatted})</span>
+            )}
           </div>
 
           {/* Print Time */}

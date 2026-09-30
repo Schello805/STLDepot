@@ -6,6 +6,7 @@ import UploadModal from './components/UploadModal';
 import EditModal from './components/EditModal';
 import SlicerModal from './components/SlicerModal';
 import ScanModal from './components/ScanModal';
+import SettingsModal from './components/SettingsModal';
 import Footer from './components/Footer';
 import { 
   Box, 
@@ -63,6 +64,20 @@ export default function App() {
   const [activeEditModel, setActiveEditModel] = useState(null);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  // Material & Pricing Settings
+  const [materialSettings, setMaterialSettings] = useState({
+    materials: [
+      { id: 'PLA', name: 'PLA', density: 1.24, price_per_kg: 19.99, color: '#38bdf8' },
+      { id: 'PETG', name: 'PETG', density: 1.27, price_per_kg: 21.99, color: '#10b981' },
+      { id: 'ABS', name: 'ABS', density: 1.04, price_per_kg: 22.99, color: '#f59e0b' },
+      { id: 'ASA', name: 'ASA', density: 1.07, price_per_kg: 24.99, color: '#ef4444' },
+      { id: 'TPU', name: 'TPU', density: 1.21, price_per_kg: 29.99, color: '#8b5cf6' }
+    ],
+    infill_factor: 0.35,
+    currency: '€'
+  });
 
   // Background Upload State
   const [backgroundUpload, setBackgroundUpload] = useState({
@@ -131,10 +146,49 @@ export default function App() {
     }
   }, [searchQuery, selectedCategory, selectedTag, onlyFavorites, sortBy]);
 
+  // Fetch Material Pricing Settings
+  const fetchSettings = useCallback(async () => {
+    try {
+      const res = await fetch('/api/system/settings');
+      const data = await res.json();
+      if (data.success && data.settings) {
+        setMaterialSettings(data.settings);
+      }
+    } catch (err) {
+      console.error('Failed to fetch settings:', err);
+    }
+  }, []);
+
+  const handleSaveSettings = async (newSettings) => {
+    const res = await fetch('/api/system/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newSettings)
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Fehler beim Speichern');
+    }
+    setMaterialSettings(newSettings);
+    fetchModels();
+    fetchSystemInfo();
+  };
+
+  const handleRecalculateWeights = async () => {
+    const res = await fetch('/api/system/recalculate-weights', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Fehler bei der Neuberechnung');
+    }
+    fetchModels();
+    return data;
+  };
+
   useEffect(() => {
     fetchSystemInfo();
     fetchMetadata();
-  }, [fetchSystemInfo, fetchMetadata]);
+    fetchSettings();
+  }, [fetchSystemInfo, fetchMetadata, fetchSettings]);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -475,6 +529,7 @@ export default function App() {
         setOnlyFavorites={setOnlyFavorites}
         onOpenUpload={() => setIsUploadOpen(true)}
         onOpenScanner={() => setIsScannerOpen(true)}
+        onOpenSettings={() => setIsSettingsOpen(true)}
         systemInfo={systemInfo}
         darkMode={darkMode}
         setDarkMode={setDarkMode}
@@ -592,6 +647,8 @@ export default function App() {
                   onToggleFavorite={handleToggleFavorite}
                   onDelete={handleDeleteModel}
                   onEdit={(m) => setActiveEditModel(m)}
+                  materialSettings={materialSettings}
+                  onOpenSettings={() => setIsSettingsOpen(true)}
                 />
               ))}
             </div>
@@ -742,6 +799,8 @@ export default function App() {
             fetchMetadata();
             fetchSystemInfo();
           }}
+          materialSettings={materialSettings}
+          onOpenSettings={() => setIsSettingsOpen(true)}
         />
       )}
 
@@ -792,6 +851,15 @@ export default function App() {
           onStartBackgroundUpload={startFolderUpload}
         />
       )}
+
+      {/* Material Pricing & Cost Settings Modal */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        materialSettings={materialSettings}
+        onSaveSettings={handleSaveSettings}
+        onRecalculateWeights={handleRecalculateWeights}
+      />
 
       {/* Footer with Dynamic Rev & Open Source info */}
       <Footer systemInfo={systemInfo} />

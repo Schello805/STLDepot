@@ -7,6 +7,7 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const archiver = require('archiver');
 import { db, MODELS_DIR, THUMBNAILS_DIR } from '../db.js';
+import { updateProjectGeometry } from '../utils/geometryCalculator.js';
 const router = express.Router();
 
 // Multer storage for uploaded models and project images
@@ -409,6 +410,8 @@ router.post('/', upload.array('files', 50), (req, res) => {
       }
     }
 
+    updateProjectGeometry(projectId).catch(() => {});
+
     res.json({ success: true, message: 'Modell erfolgreich gespeichert', projectId });
   } catch (err) {
     console.error('Error creating model:', err);
@@ -513,6 +516,10 @@ router.post('/batch', upload.array('files', 500), (req, res) => {
     });
 
     transaction(req.files);
+
+    for (const p of createdProjects) {
+      updateProjectGeometry(p.id).catch(() => {});
+    }
 
     res.json({
       success: true,
@@ -629,7 +636,27 @@ router.put('/:id', (req, res) => {
       }
     }
 
+    if (filament_type) {
+      updateProjectGeometry(projectId).catch(() => {});
+    }
+
     res.json({ success: true, message: 'Projekt aktualisiert' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// PATCH /api/models/:id/geometry - Save calculated volume and weight
+router.patch('/:id/geometry', (req, res) => {
+  try {
+    const { volume_cm3, weight_grams } = req.body;
+    db.prepare(`
+      UPDATE projects 
+      SET volume_cm3 = COALESCE(?, volume_cm3), 
+          weight_grams = COALESCE(?, weight_grams) 
+      WHERE id = ?
+    `).run(volume_cm3, weight_grams, req.params.id);
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

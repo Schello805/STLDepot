@@ -83,6 +83,35 @@ export function initDB() {
     );
   `);
 
+  // Ensure volume_cm3 and weight_grams columns exist on projects
+  const projectCols = db.prepare("PRAGMA table_info(projects)").all().map(c => c.name);
+  if (!projectCols.includes('volume_cm3')) {
+    db.exec(`ALTER TABLE projects ADD COLUMN volume_cm3 REAL DEFAULT 0`);
+  }
+  if (!projectCols.includes('weight_grams')) {
+    db.exec(`ALTER TABLE projects ADD COLUMN weight_grams REAL DEFAULT 0`);
+  }
+
+  // Seed default material settings if not set
+  const existingSettings = db.prepare('SELECT value FROM settings WHERE key = ?').get('material_settings');
+  if (!existingSettings) {
+    const defaultMaterialSettings = {
+      materials: [
+        { id: 'PLA', name: 'PLA', density: 1.24, price_per_kg: 19.99, color: '#38bdf8' },
+        { id: 'PETG', name: 'PETG', density: 1.27, price_per_kg: 21.99, color: '#10b981' },
+        { id: 'ABS', name: 'ABS', density: 1.04, price_per_kg: 22.99, color: '#f59e0b' },
+        { id: 'ASA', name: 'ASA', density: 1.07, price_per_kg: 24.99, color: '#ef4444' },
+        { id: 'TPU', name: 'TPU', density: 1.21, price_per_kg: 29.99, color: '#8b5cf6' }
+      ],
+      infill_factor: 0.35, // effective density with ~15% infill + 3 perimeters
+      currency: '€'
+    };
+    db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run(
+      'material_settings',
+      JSON.stringify(defaultMaterialSettings)
+    );
+  }
+
   console.log('Database initialized successfully at:', DB_PATH);
 }
 

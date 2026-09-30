@@ -18,10 +18,13 @@ import {
   Weight,
   Sparkles,
   Heart,
-  QrCode
+  QrCode,
+  Coins,
+  Settings
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { generateThumbnailSnapshot } from '../utils/threeUtils';
+import { calculateModelCost } from '../utils/costCalculator';
 
 export default function ViewerModal({ 
   model, 
@@ -30,7 +33,9 @@ export default function ViewerModal({
   onDelete, 
   onEdit, 
   onToggleFavorite,
-  onModelUpdated 
+  onModelUpdated,
+  materialSettings,
+  onOpenSettings
 }) {
   if (!model) return null;
 
@@ -45,6 +50,13 @@ export default function ViewerModal({
   const [savingThumb, setSavingThumb] = useState(false);
   const [thumbSavedSuccess, setThumbSavedSuccess] = useState(false);
   const [showLabelModal, setShowLabelModal] = useState(false);
+
+  const modelWithStats = meshStats ? {
+    ...model,
+    volume_cm3: meshStats.volumeCm3 || model.volume_cm3,
+    weight_grams: parseFloat(meshStats.estimatedWeightGrams) || model.weight_grams
+  } : model;
+  const costInfo = calculateModelCost(modelWithStats, materialSettings);
 
   useEffect(() => {
     if (modelFiles.length > 0 && !selectedFile) {
@@ -260,6 +272,42 @@ export default function ViewerModal({
               </p>
             </div>
 
+            {/* Material & Print Cost Card */}
+            <div className="p-4 rounded-2xl bg-gradient-to-tr from-emerald-950/60 via-slate-900 to-slate-950 border border-emerald-500/40 shadow-lg shadow-emerald-950/20 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-emerald-300 flex items-center gap-1.5 uppercase tracking-wider">
+                  <Coins className="w-4 h-4 text-emerald-400" />
+                  Geschätzte Druckkosten
+                </span>
+                {onOpenSettings && (
+                  <button 
+                    onClick={onOpenSettings}
+                    className="text-[11px] text-slate-400 hover:text-emerald-300 transition flex items-center gap-1 bg-slate-800/80 px-2 py-1 rounded-lg border border-slate-700/80 hover:border-emerald-500/40"
+                    title="Kilopreise der Filamente in den Einstellungen anpassen"
+                  >
+                    <Settings className="w-3 h-3 text-emerald-400" />
+                    <span>Preise verwalten</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-baseline justify-between pt-1">
+                <div>
+                  <span className="text-2xl font-black font-mono tracking-tight text-emerald-300">
+                    {costInfo?.price || '-- €'}
+                  </span>
+                  {costInfo?.weight > 0 && (
+                    <span className="text-xs text-slate-300 font-mono ml-2">
+                      (~{costInfo.weight} g {costInfo.materialName})
+                    </span>
+                  )}
+                </div>
+                <span className="text-[11px] text-slate-400 font-mono">
+                  Basis: {costInfo?.pricePerKg} {costInfo?.currency}/kg
+                </span>
+              </div>
+            </div>
+
             {/* 3D Geometry Specifications */}
             {meshStats && (
               <div>
@@ -289,8 +337,8 @@ export default function ViewerModal({
                     <span className="font-mono font-semibold text-slate-100">{meshStats.triangles.toLocaleString()}</span>
                   </div>
                   <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800">
-                    <span className="text-slate-400 block text-[10px]">Gewicht (~PLA)</span>
-                    <span className="font-mono font-semibold text-cyan-400">~{meshStats.estimatedWeightGrams} g</span>
+                    <span className="text-slate-400 block text-[10px]">Gewicht (~{costInfo?.materialName || 'PLA'})</span>
+                    <span className="font-mono font-semibold text-cyan-400">~{costInfo?.weight || meshStats.estimatedWeightGrams} g</span>
                   </div>
                 </div>
               </div>
@@ -311,8 +359,8 @@ export default function ViewerModal({
                   </span>
                 </div>
                 <div className="flex justify-between items-center py-2 px-3 rounded-xl bg-slate-950/40 border border-slate-800">
-                  <span className="text-slate-400">Infill</span>
-                  <span className="font-medium text-slate-200">{model.infill_percentage || 15}%</span>
+                  <span className="text-slate-400">Materialkosten</span>
+                  <span className="font-mono font-bold text-emerald-400">{costInfo?.price}</span>
                 </div>
                 <div className="flex justify-between items-center py-2 px-3 rounded-xl bg-slate-950/40 border border-slate-800">
                   <span className="text-slate-400">Druckzeit</span>
