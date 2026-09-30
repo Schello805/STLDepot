@@ -5,13 +5,15 @@ import express from 'express';
 import modelsRouter from '../server/routes/models.js';
 import webImportRouter from '../server/routes/webImport.js';
 import systemRouter from '../server/routes/system.js';
-import { db } from '../server/db.js';
+import { initDB, db } from '../server/db.js';
 
 describe('API Routes Integration & Security Suite', () => {
   let server;
   let baseUrl;
 
   before(async () => {
+    initDB();
+
     const app = express();
     app.use(express.json({ limit: '50mb' }));
     app.use(express.urlencoded({ extended: true, limit: '50mb' }));

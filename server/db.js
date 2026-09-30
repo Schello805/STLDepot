@@ -116,4 +116,7 @@ export function initDB() {
   console.log('Database initialized successfully at:', DB_PATH);
 }
 
+// Auto-initialize tables so any module or test importing db has all tables ready
+initDB();
+
 export { db, DATA_DIR, MODELS_DIR, THUMBNAILS_DIR, WATCH_DIR };
