@@ -14,7 +14,9 @@ import {
   FileBox,
   Check,
   FolderTree,
-  Files
+  Files,
+  ShieldCheck,
+  RefreshCw
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -34,6 +36,9 @@ export default function ScanModal({
   // Structure preference: 'preserve' (subfolders = multi-part assemblies) vs 'flat' (all files individual in root)
   const [structureMode, setStructureMode] = useState('preserve');
 
+  // Duplicate preference: 'skip' (do not re-import existing) vs 'overwrite' (update existing model)
+  const [duplicateAction, setDuplicateAction] = useState('skip');
+
   // Native folder selection via browser
   const folderInputRef = useRef(null);
   const [pickedFolderInfo, setPickedFolderInfo] = useState(null);
@@ -51,7 +56,8 @@ export default function ScanModal({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           path: customPath,
-          preserveStructure: structureMode === 'preserve'
+          preserveStructure: structureMode === 'preserve',
+          duplicateAction: duplicateAction
         })
       });
 
@@ -141,7 +147,8 @@ export default function ScanModal({
       onStartBackgroundUpload({
         items,
         isPreserve: structureMode === 'preserve',
-        folderName: pickedFolderInfo.name
+        folderName: pickedFolderInfo.name,
+        duplicateAction: duplicateAction
       });
     }
   };
@@ -178,7 +185,7 @@ export default function ScanModal({
           {/* STRUCTURE MODE SELECTOR (User Choice: Preserve folder structure vs. Individual files) */}
           <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2.5">
             <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block">
-              Import-Modus: Wie sollen die Dateien angelegt werden?
+              1. Import-Modus: Wie sollen die Dateien angelegt werden?
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               
@@ -227,6 +234,64 @@ export default function ScanModal({
                 </div>
                 <p className="text-[11px] text-slate-400 leading-relaxed">
                   Jede STL/3MF-Datei wird als <strong>eigenständige Karte</strong> im Katalog angelegt (flache Struktur).
+                </p>
+              </button>
+
+            </div>
+          </div>
+
+          {/* DUPLICATE HANDLING SELECTOR (User Choice: Skip duplicates vs Overwrite) */}
+          <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2.5">
+            <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block">
+              2. Duplikat-Erkennung: Was tun bei bereits vorhandenen Modellen?
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              
+              {/* Option 1: Skip Duplicates */}
+              <button
+                type="button"
+                onClick={() => setDuplicateAction('skip')}
+                className={`p-3.5 rounded-xl border text-left transition flex flex-col gap-1.5 ${
+                  duplicateAction === 'skip'
+                    ? 'bg-emerald-950/50 border-emerald-500 text-white shadow-md'
+                    : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 font-bold text-xs text-emerald-400">
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>Duplikate überspringen</span>
+                  </div>
+                  {duplicateAction === 'skip' && (
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400"></span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Bereits vorhandene Modelle werden erkannt und <strong>nicht erneut importiert</strong> (keine Dopplungen).
+                </p>
+              </button>
+
+              {/* Option 2: Overwrite Duplicates */}
+              <button
+                type="button"
+                onClick={() => setDuplicateAction('overwrite')}
+                className={`p-3.5 rounded-xl border text-left transition flex flex-col gap-1.5 ${
+                  duplicateAction === 'overwrite'
+                    ? 'bg-amber-950/50 border-amber-500 text-white shadow-md'
+                    : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 font-bold text-xs text-amber-400">
+                    <RefreshCw className="w-4 h-4" />
+                    <span>Duplikate überschreiben</span>
+                  </div>
+                  {duplicateAction === 'overwrite' && (
+                    <span className="w-2 h-2 rounded-full bg-amber-400 shadow-sm shadow-amber-400"></span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Bereits vorhandene Modelle mit gleichem Namen werden mit den neuen Dateien <strong>aktualisiert</strong>.
                 </p>
               </button>
 

@@ -173,12 +173,14 @@ export default function App() {
     return () => observer.disconnect();
   }, [models.length, visibleCount]);
 
-  // Concurrent Background Folder Upload Runner (4 parallel workers)
-  const startFolderUpload = useCallback(async ({ items, isPreserve, folderName }) => {
+  // Concurrent Background Folder Upload Runner (4 parallel workers) with Duplicate Detection
+  const startFolderUpload = useCallback(async ({ items, isPreserve, folderName, duplicateAction = 'skip' }) => {
     if (!items || items.length === 0) return;
     const total = items.length;
     let completed = 0;
-    let successful = 0;
+    let added = 0;
+    let skipped = 0;
+    let overwritten = 0;
     let lastRefreshTime = Date.now();
 
     setBackgroundUpload({
@@ -188,7 +190,7 @@ export default function App() {
       total,
       currentTitle: items[0]?.name || '',
       successCount: 0,
-      statusText: `Starte parallelen Upload (${total} Einträge)...`
+      statusText: `Starte Import (${total} Einträge, Modus: ${duplicateAction === 'skip' ? 'Duplikate überspringen' : 'Duplikate überschreiben'})...`
     });
 
     const CONCURRENCY = 4;
@@ -212,6 +214,7 @@ export default function App() {
         formData.append('author', 'Michael Schellenberger');
         formData.append('filament_color', '#38bdf8');
         formData.append('filament_type', 'PLA');
+        formData.append('duplicate_action', duplicateAction || 'skip');
 
         if (isPreserve) {
           formData.append('category', item.isSubfolder ? 'Baugruppen' : 'Deko & Haushalt');
@@ -231,8 +234,15 @@ export default function App() {
             method: 'POST',
             body: formData
           });
-          if (res.ok) {
-            successful++;
+          const data = await res.json();
+          if (res.ok && data.success) {
+            if (data.action === 'skipped') {
+              skipped++;
+            } else if (data.action === 'overwritten') {
+              overwritten++;
+            } else {
+              added++;
+            }
           }
         } catch (err) {
           console.error('Upload error for', formattedTitle, err);
@@ -245,7 +255,7 @@ export default function App() {
           ...prev,
           progress: pct,
           current: completed,
-          successCount: successful
+          successCount: added + overwritten
         }));
 
         // Dynamically refresh models while growing (every 2.5s or on finish)
@@ -270,11 +280,15 @@ export default function App() {
     fetchSystemInfo();
     confetti({ particleCount: 70, spread: 80 });
 
+    let finalSummary = `✅ ${added} neu importiert`;
+    if (skipped > 0) finalSummary += `, ${skipped} Duplikate übersprungen`;
+    if (overwritten > 0) finalSummary += `, ${overwritten} aktualisiert`;
+
     setBackgroundUpload(prev => ({
       ...prev,
       active: false,
       progress: 100,
-      statusText: `✅ ${successful} Modelle erfolgreich importiert!`
+      statusText: finalSummary
     }));
 
     setTimeout(() => {
@@ -282,7 +296,7 @@ export default function App() {
         if (!prev.active) return { ...prev, progress: 0, statusText: '' };
         return prev;
       });
-    }, 6000);
+    }, 7000);
   }, [fetchModels, fetchMetadata, fetchSystemInfo]);
 
   // Global Keyboard Shortcuts (Escape closes modals)

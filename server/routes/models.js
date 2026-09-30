@@ -177,13 +177,141 @@ router.post('/', upload.array('files', 50), (req, res) => {
       source_url = '',
       notes = '',
       tags = '[]',
-      thumbnail_base64 = ''
+      thumbnail_base64 = '',
+      duplicate_action = 'keep_both' // 'skip' | 'overwrite' | 'keep_both'
     } = req.body;
 
     if (!title || !title.trim()) {
       return res.status(400).json({ success: false, error: 'Titel ist erforderlich' });
     }
 
+    const cleanTitle = title.trim();
+
+    // DUPLICATE DETECTION: Check if project already exists by exact/case-insensitive title or matching primary file
+    let existingProject = db.prepare('SELECT * FROM projects WHERE LOWER(title) = LOWER(?)').get(cleanTitle);
+
+    if (!existingProject && req.files && req.files.length > 0) {
+      const firstFile = req.files[0];
+      const match = db.prepare(`
+        SELECT p.* FROM projects p
+        JOIN project_files pf ON p.id = pf.project_id
+        WHERE pf.original_name = ? AND pf.file_size = ?
+        LIMIT 1
+      `).get(firstFile.originalname, firstFile.size);
+      if (match) {
+        existingProject = match;
+      }
+    }
+
+    // CASE A: Duplicate detected & User chose "skip" (Do not import again)
+    if (existingProject && duplicate_action === 'skip') {
+      // Remove freshly uploaded temp files from disk to prevent orphaned files
+      if (req.files && req.files.length > 0) {
+        for (const file of req.files) {
+          if (file.path && fs.existsSync(file.path)) {
+            try { fs.unlinkSync(file.path); } catch {}
+          }
+        }
+      }
+      return res.json({
+        success: true,
+        action: 'skipped',
+        message: `Modell "${cleanTitle}" existiert bereits und wurde übersprungen.`,
+        projectId: existingProject.id
+      });
+    }
+
+    // CASE B: Duplicate detected & User chose "overwrite" (Update existing project)
+    if (existingProject && duplicate_action === 'overwrite') {
+      const projectId = existingProject.id;
+
+      // 1. Delete previous physical files from disk
+      const oldFiles = db.prepare('SELECT file_path FROM project_files WHERE project_id = ?').all(projectId);
+      for (const of of oldFiles) {
+        if (of.file_path && fs.existsSync(of.file_path)) {
+          try { fs.unlinkSync(of.file_path); } catch {}
+        }
+      }
+      db.prepare('DELETE FROM project_files WHERE project_id = ?').run(projectId);
+
+      // 2. Optional thumbnail replacement
+      let thumbnailUrl = existingProject.thumbnail_url;
+      if (thumbnail_base64 && thumbnail_base64.startsWith('data:image/')) {
+        try {
+          const matches = thumbnail_base64.match(/^data:image\/([a-zA-Z0-9]+);base64,(.+)$/);
+          if (matches) {
+            const ext = matches[1] === 'jpeg' ? 'jpg' : matches[1];
+            const thumbFilename = `thumb_${projectId}.${ext}`;
+            const thumbPath = path.join(THUMBNAILS_DIR, thumbFilename);
+            const buffer = Buffer.from(matches[2], 'base64');
+            fs.writeFileSync(thumbPath, buffer);
+            thumbnailUrl = `/api/thumbnails/${thumbFilename}`;
+          }
+        } catch (e) {
+          console.error('Thumbnail save error:', e);
+        }
+      }
+
+      // 3. Update project metadata
+      db.prepare(`
+        UPDATE projects SET
+          description = ?, category = ?, author = ?,
+          thumbnail_url = ?, filament_type = ?, filament_color = ?,
+          infill_percentage = ?, print_time_minutes = ?, nozzle_size = ?,
+          supports_needed = ?, source_url = ?, notes = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(
+        description.trim() || existingProject.description,
+        category.trim() || existingProject.category,
+        author.trim() || existingProject.author,
+        thumbnailUrl,
+        filament_type,
+        filament_color,
+        parseInt(infill_percentage, 10) || existingProject.infill_percentage,
+        parseInt(print_time_minutes, 10) || existingProject.print_time_minutes,
+        parseFloat(nozzle_size) || existingProject.nozzle_size,
+        supports_needed === 'true' || supports_needed === '1' || supports_needed === 1 ? 1 : 0,
+        source_url.trim() || existingProject.source_url,
+        notes.trim() || existingProject.notes,
+        projectId
+      );
+
+      // 4. Insert new files
+      if (req.files && req.files.length > 0) {
+        const insertFile = db.prepare(`
+          INSERT INTO project_files (
+            id, project_id, original_name, stored_name, file_path, file_size, file_type
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        `);
+
+        for (const file of req.files) {
+          const fileId = 'file_' + crypto.randomBytes(8).toString('hex');
+          const ext = path.extname(file.originalname).toLowerCase().replace('.', '');
+          let fileType = 'other';
+          if (ext === 'stl' || ext === '3mf') fileType = ext;
+          else if (['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(ext)) fileType = 'image';
+
+          insertFile.run(
+            fileId,
+            projectId,
+            file.originalname,
+            file.filename,
+            file.path,
+            file.size,
+            fileType
+          );
+        }
+      }
+
+      return res.json({
+        success: true,
+        action: 'overwritten',
+        message: `Modell "${cleanTitle}" wurde erfolgreich aktualisiert / überschrieben.`,
+        projectId
+      });
+    }
+
+    // CASE C: New Model Project (Normal Insert)
     const projectId = 'proj_' + crypto.randomBytes(8).toString('hex');
     let thumbnailUrl = '';
 
@@ -212,7 +340,7 @@ router.post('/', upload.array('files', 50), (req, res) => {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       projectId,
-      title.trim(),
+      cleanTitle,
       description.trim(),
       category.trim() || 'Allgemein',
       author.trim(),

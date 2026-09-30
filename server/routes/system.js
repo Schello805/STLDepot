@@ -127,16 +127,19 @@ router.post('/pull-update', (req, res) => {
   }
 });
 
-// POST /api/system/scan - Manually trigger background folder scan
+// POST /api/system/scan - Manually trigger background folder scan with duplicate handling
 router.post('/scan', (req, res) => {
   try {
     const customPath = req.body.path || WATCH_DIR;
     const preserveStructure = req.body.preserveStructure !== false; // default true
-    const result = scanDirectory(customPath, preserveStructure);
+    const duplicateAction = req.body.duplicateAction || 'skip'; // 'skip' | 'overwrite'
+    const result = scanDirectory(customPath, preserveStructure, duplicateAction);
     res.json({
       success: true,
-      message: `Scan abgeschlossen: ${result.added} neue 3D-Modelle importiert.`,
+      message: `Scan abgeschlossen: ${result.added} neue Modelle importiert, ${result.skipped || 0} Duplikate übersprungen, ${result.overwritten || 0} aktualisiert.`,
       added: result.added,
+      skipped: result.skipped || 0,
+      overwritten: result.overwritten || 0,
       errors: result.errors
     });
   } catch (err) {
