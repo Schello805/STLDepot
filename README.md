@@ -189,4 +189,17 @@ Dieses Projekt steht unter der **[Creative Commons Attribution-NonCommercial 4.0
 - ✅ **Erlaubt:** Kostenfreie private Nutzung, Anpassung und Weitergabe für Maker und 3D-Druck-Begeisterte.
 - ❌ **Nicht erlaubt:** Kommerzielle Nutzung oder gewerblicher Weiterverkauf ohne vorherige schriftliche Genehmigung.
 
+
+
+## 📜 Screenshots
+<img width="1479" height="804" alt="Start" src="https://github.com/user-attachments/assets/017318fc-789f-429f-bf48-acbe839b5b96" />
+
+<img width="629" height="650" alt="Import" src="https://github.com/user-attachments/assets/d65f5b9e-31eb-4a22-bac6-7e284fdee101" />
+
+<img width="1033" height="641" alt="Detail View" src="https://github.com/user-attachments/assets/6cca79bc-e4cf-4176-ba86-2d70c28bbbf5" />
+
+
+
+
+
 **Entwickelt mit ❤️ von [Michael Schellenberger](https://github.com/Schello805)**
