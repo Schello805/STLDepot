@@ -899,4 +899,72 @@ router.get('/files/:fileId/raw', (req, res) => {
   }
 });
 
+// POST /api/models/open-in-slicer - Directly launches local slicer application with model file
+router.post('/open-in-slicer', (req, res) => {
+  try {
+    const { slicer, fileId, modelId } = req.body;
+    let file = null;
+
+    if (fileId) {
+      file = db.prepare('SELECT * FROM project_files WHERE id = ?').get(fileId);
+    } else if (modelId) {
+      file = db.prepare("SELECT * FROM project_files WHERE project_id = ? AND file_type IN ('stl', '3mf') LIMIT 1").get(modelId);
+    }
+
+    if (!file || !fs.existsSync(file.file_path)) {
+      return res.status(404).json({ success: false, error: 'Datei nicht auf dem Server gefunden' });
+    }
+
+    const { execSync } = require('child_process');
+    const platform = process.platform;
+    let opened = false;
+
+    if (platform === 'darwin') {
+      const macApps = {
+        anycubic: ['AnycubicSlicerNext', 'Anycubic Slicer Next', 'AnycubicSlicer', 'Photon_Workshop'],
+        bambu: ['BambuStudio', 'Bambu Studio'],
+        orca: ['OrcaSlicer', 'OrcaSlicer-macos', 'Orca Slicer'],
+        prusa: ['PrusaSlicer', 'Original Prusa Drivers/PrusaSlicer'],
+        cura: ['UltiMaker Cura', 'Cura']
+      };
+
+      const candidates = macApps[slicer] || [];
+      for (const app of candidates) {
+        try {
+          execSync(`open -a "${app}" "${file.file_path}"`, { timeout: 5000, stdio: 'ignore' });
+          opened = true;
+          break;
+        } catch {}
+      }
+
+      // If specific app not found, try acnext protocol for anycubic
+      if (!opened && slicer === 'anycubic') {
+        try {
+          execSync(`open "acnext://open?file=${encodeURIComponent(file.file_path)}"`, { timeout: 5000, stdio: 'ignore' });
+          opened = true;
+        } catch {}
+      }
+    } else if (platform === 'win32') {
+      try {
+        execSync(`explorer "${file.file_path.replace(/\//g, '\\')}"`, { timeout: 5000, stdio: 'ignore' });
+        opened = true;
+      } catch {}
+    } else {
+      // Linux
+      try {
+        execSync(`xdg-open "${file.file_path}"`, { timeout: 5000, stdio: 'ignore' });
+        opened = true;
+      } catch {}
+    }
+
+    if (opened) {
+      return res.json({ success: true, message: `Datei direkt in Slicer geöffnet!` });
+    } else {
+      return res.json({ success: false, message: `Lokaler Slicer konnte nicht direkt gestartet werden.` });
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 export default router;

@@ -245,7 +245,7 @@ export default function ModelCard({
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs border border-slate-600 shadow-lg transition active:scale-95"
             >
               <Printer className="w-3.5 h-3.5 text-cyan-400" />
-              Drucken
+              Slicer
             </button>
           </div>
         )}

@@ -16,6 +16,8 @@ export default function SlicerModal({ model, file, onClose }) {
   if (!model) return null;
 
   const [copied, setCopied] = useState(false);
+  const [opening, setOpening] = useState(false);
+  const [openStatus, setOpenStatus] = useState(null);
   const targetFile = file || model.files?.find(f => f.file_type === 'stl' || f.file_type === '3mf') || model.files?.[0];
   
   const fileDownloadUrl = targetFile ? `${window.location.origin}/api/models/files/${targetFile.id}/raw` : '';
@@ -23,6 +25,7 @@ export default function SlicerModal({ model, file, onClose }) {
 
   const slicers = [
     {
+      id: 'orca',
       name: 'OrcaSlicer',
       desc: 'High Performance Open-Source Slicer für Voron, Bambu Lab, Creality & Co.',
       icon: '🐋',
@@ -30,6 +33,7 @@ export default function SlicerModal({ model, file, onClose }) {
       badge: 'Empfohlen'
     },
     {
+      id: 'bambu',
       name: 'Bambu Studio',
       desc: 'Offizieller Slicer für Bambu Lab X1, P1, A1 Serien',
       icon: '🎋',
@@ -37,13 +41,15 @@ export default function SlicerModal({ model, file, onClose }) {
       badge: 'Bambu Lab'
     },
     {
-      name: 'Anycubic Slicer',
+      id: 'anycubic',
+      name: 'Anycubic Slicer Next',
       desc: 'Offizieller Slicer für Anycubic Kobra 2 / 3 & ACE Pro Multi-Color',
       icon: '🔷',
-      scheme: `anycubicslicer://open?file=${encodeURIComponent(fileDownloadUrl)}`,
+      scheme: `acnext://open?file=${encodeURIComponent(fileDownloadUrl)}`,
       badge: 'Anycubic FDM'
     },
     {
+      id: 'anycubic_photon',
       name: 'Anycubic Photon',
       desc: 'Slicer & Support-Generator für Anycubic Photon Mono & M-Serie',
       icon: '🧪',
@@ -51,6 +57,7 @@ export default function SlicerModal({ model, file, onClose }) {
       badge: 'Anycubic Resin'
     },
     {
+      id: 'prusa',
       name: 'PrusaSlicer',
       desc: 'Präziser Slicer für Original Prusa, MMU & Universal-Drucker',
       icon: '🔶',
@@ -58,6 +65,7 @@ export default function SlicerModal({ model, file, onClose }) {
       badge: 'Prusa'
     },
     {
+      id: 'cura',
       name: 'UltiMaker Cura',
       desc: 'Klassischer Open-Source Slicer mit großer Drucker-Kompatibilität',
       icon: '⚙️',
@@ -66,9 +74,40 @@ export default function SlicerModal({ model, file, onClose }) {
     }
   ];
 
-  const handleOpenSlicer = (scheme) => {
-    window.location.href = scheme;
-    confetti({ particleCount: 30, spread: 50 });
+  const handleOpenSlicer = async (slicer) => {
+    setOpening(true);
+    setOpenStatus(null);
+
+    // 1. Try launching the slicer directly on local host via backend API
+    try {
+      const res = await fetch('/api/models/open-in-slicer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slicer: slicer.id,
+          fileId: targetFile?.id,
+          modelId: model.id
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setOpenStatus({ type: 'success', text: `Erfolgreich in ${slicer.name} geöffnet!` });
+        confetti({ particleCount: 35, spread: 60 });
+        setOpening(false);
+        return;
+      }
+    } catch {}
+
+    // 2. Fallback to registered browser URL protocol scheme (acnext://, orcaslicer://, etc.)
+    try {
+      window.location.href = slicer.scheme;
+      setOpenStatus({ type: 'info', text: `Slicer-Befehl an ${slicer.name} gesendet.` });
+      confetti({ particleCount: 30, spread: 50 });
+    } catch (e) {
+      setOpenStatus({ type: 'error', text: 'Konnte Slicer nicht öffnen. Lade die Datei herunter.' });
+    } finally {
+      setOpening(false);
+    }
   };
 
   const handleCopyLink = () => {
@@ -104,6 +143,18 @@ export default function SlicerModal({ model, file, onClose }) {
 
         {/* Content */}
         <div className="p-6 space-y-5">
+          {/* Status Alert if triggered */}
+          {openStatus && (
+            <div className={`flex items-center gap-2 p-3 rounded-xl text-xs font-medium border ${
+              openStatus.type === 'success'
+                ? 'bg-emerald-950/70 border-emerald-500/40 text-emerald-200'
+                : 'bg-cyan-950/70 border-cyan-500/40 text-cyan-200'
+            }`}>
+              <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>{openStatus.text}</span>
+            </div>
+          )}
+
           <p className="text-xs text-slate-300">
             Wähle deinen installierten Slicer für eine direkte Übergabe oder lade die Modelldatei herunter:
           </p>
@@ -113,7 +164,7 @@ export default function SlicerModal({ model, file, onClose }) {
             {slicers.map((slicer) => (
               <button
                 key={slicer.name}
-                onClick={() => handleOpenSlicer(slicer.scheme)}
+                onClick={() => handleOpenSlicer(slicer)}
                 className="group text-left p-4 rounded-2xl bg-slate-950/60 hover:bg-slate-950 border border-slate-800 hover:border-cyan-500/50 transition-all flex flex-col justify-between"
               >
                 <div>
