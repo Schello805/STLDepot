@@ -18,7 +18,6 @@ import {
   Coins
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { parseSTL, parse3MF, generateThumbnailSnapshot, extract3MFThumbnail } from '../utils/threeUtils';
 import { calculateModelCost } from '../utils/costCalculator';
 
 export default function ModelCard({ 
@@ -77,6 +76,8 @@ export default function ModelCard({
         const response = await fetch(`/api/models/files/${primaryModelFile.id}/raw`);
         if (!response.ok) throw new Error('Could not fetch 3D file for thumbnail');
         const buffer = await response.arrayBuffer();
+
+        const { parseSTL, parse3MF, generateThumbnailSnapshot, extract3MFThumbnail } = await import('../utils/threeUtils');
 
         let dataUrl = null;
         if (primaryModelFile.file_type === '3mf') {

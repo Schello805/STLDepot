@@ -13,11 +13,12 @@ import {
 import confetti from 'canvas-confetti';
 
 export default function SlicerModal({ model, file, onClose }) {
-  if (!model) return null;
-
   const [copied, setCopied] = useState(false);
   const [opening, setOpening] = useState(false);
   const [openStatus, setOpenStatus] = useState(null);
+
+  if (!model) return null;
+
   const targetFile = file || model.files?.find(f => f.file_type === 'stl' || f.file_type === '3mf') || model.files?.[0];
   
   const fileDownloadUrl = targetFile ? `${window.location.origin}/api/models/files/${targetFile.id}/raw` : '';

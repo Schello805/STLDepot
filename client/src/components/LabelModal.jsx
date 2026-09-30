@@ -14,11 +14,11 @@ import {
 } from 'lucide-react';
 
 export default function LabelModal({ model, onClose }) {
-  if (!model) return null;
-
   const [labelSize, setLabelSize] = useState('medium'); // 'small' (50x30mm), 'medium' (70x36mm), 'large' (100x50mm)
   const [copied, setCopied] = useState(false);
   const printAreaRef = useRef(null);
+
+  if (!model) return null;
 
   const modelUrl = `${window.location.origin}/#model-${model.id}`;
   // Generate high-resolution QR code URL using standard QR server

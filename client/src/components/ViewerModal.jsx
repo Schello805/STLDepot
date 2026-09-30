@@ -37,11 +37,9 @@ export default function ViewerModal({
   materialSettings,
   onOpenSettings
 }) {
-  if (!model) return null;
-
-  const modelFiles = model.files?.filter(f => f.file_type === 'stl' || f.file_type === '3mf') || [];
-  const imageFiles = model.files?.filter(f => f.file_type === 'image') || [];
-  const otherFiles = model.files?.filter(f => f.file_type !== 'stl' && f.file_type !== '3mf' && f.file_type !== 'image') || [];
+  const modelFiles = model?.files?.filter(f => f.file_type === 'stl' || f.file_type === '3mf') || [];
+  const imageFiles = model?.files?.filter(f => f.file_type === 'image') || [];
+  const otherFiles = model?.files?.filter(f => f.file_type !== 'stl' && f.file_type !== '3mf' && f.file_type !== 'image') || [];
 
   const [selectedFile, setSelectedFile] = useState(modelFiles[0] || null);
   const [activeTab, setActiveTab] = useState('3d'); // '3d', 'gallery', 'files', 'notes'
@@ -51,18 +49,20 @@ export default function ViewerModal({
   const [thumbSavedSuccess, setThumbSavedSuccess] = useState(false);
   const [showLabelModal, setShowLabelModal] = useState(false);
 
+  useEffect(() => {
+    if (modelFiles.length > 0 && !selectedFile) {
+      setSelectedFile(modelFiles[0]);
+    }
+  }, [model, modelFiles.length, selectedFile]);
+
+  if (!model) return null;
+
   const modelWithStats = meshStats ? {
     ...model,
     volume_cm3: meshStats.volumeCm3 || model.volume_cm3,
     weight_grams: parseFloat(meshStats.estimatedWeightGrams) || model.weight_grams
   } : model;
   const costInfo = calculateModelCost(modelWithStats, materialSettings);
-
-  useEffect(() => {
-    if (modelFiles.length > 0 && !selectedFile) {
-      setSelectedFile(modelFiles[0]);
-    }
-  }, [model]);
 
   // Handle saving new thumbnail from current geometry
   const handleCaptureThumbnail = async () => {

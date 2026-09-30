@@ -13,28 +13,28 @@ import {
 import { useDialog } from '../context/DialogContext';
 
 export default function EditModal({ model, onClose, onUpdated }) {
-  if (!model) return null;
-
   const { confirm, alert } = useDialog();
-  const [title, setTitle] = useState(model.title || '');
-  const [description, setDescription] = useState(model.description || '');
-  const [category, setCategory] = useState(model.category || 'Allgemein');
-  const [author, setAuthor] = useState(model.author || '');
-  const [filamentType, setFilamentType] = useState(model.filament_type || 'PLA');
-  const [filamentColor, setFilamentColor] = useState(model.filament_color || '#38bdf8');
-  const [infill, setInfill] = useState(model.infill_percentage || 15);
-  const [printTime, setPrintTime] = useState(model.print_time_minutes || '');
-  const [nozzleSize, setNozzleSize] = useState(model.nozzle_size || 0.4);
-  const [supports, setSupports] = useState(Boolean(model.supports_needed));
-  const [sourceUrl, setSourceUrl] = useState(model.source_url || '');
-  const [notes, setNotes] = useState(model.notes || '');
+  const [title, setTitle] = useState(model?.title || '');
+  const [description, setDescription] = useState(model?.description || '');
+  const [category, setCategory] = useState(model?.category || 'Allgemein');
+  const [author, setAuthor] = useState(model?.author || '');
+  const [filamentType, setFilamentType] = useState(model?.filament_type || 'PLA');
+  const [filamentColor, setFilamentColor] = useState(model?.filament_color || '#38bdf8');
+  const [infill, setInfill] = useState(model?.infill_percentage ?? 15);
+  const [printTime, setPrintTime] = useState(model?.print_time_minutes || '');
+  const [nozzleSize, setNozzleSize] = useState(model?.nozzle_size ?? 0.4);
+  const [supports, setSupports] = useState(Boolean(model?.supports_needed));
+  const [sourceUrl, setSourceUrl] = useState(model?.source_url || '');
+  const [notes, setNotes] = useState(model?.notes || '');
   const [tagInput, setTagInput] = useState('');
-  const [tags, setTags] = useState(model.tags || []);
-  const [files, setFiles] = useState(model.files || []);
+  const [tags, setTags] = useState(model?.tags || []);
+  const [files, setFiles] = useState(model?.files || []);
   const [newFiles, setNewFiles] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const extraFileInputRef = useRef(null);
+
+  if (!model) return null;
 
   const categories = [
     'Deko & Haushalt',

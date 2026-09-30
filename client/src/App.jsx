@@ -1,13 +1,15 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react';
 import Navbar from './components/Navbar';
 import ModelCard from './components/ModelCard';
-import ViewerModal from './components/ViewerModal';
-import UploadModal from './components/UploadModal';
-import EditModal from './components/EditModal';
-import SlicerModal from './components/SlicerModal';
-import ScanModal from './components/ScanModal';
-import SettingsModal from './components/SettingsModal';
 import Footer from './components/Footer';
+
+// Code-split heavy modals and 3D dependencies
+const ViewerModal = lazy(() => import('./components/ViewerModal'));
+const UploadModal = lazy(() => import('./components/UploadModal'));
+const EditModal = lazy(() => import('./components/EditModal'));
+const SlicerModal = lazy(() => import('./components/SlicerModal'));
+const ScanModal = lazy(() => import('./components/ScanModal'));
+const SettingsModal = lazy(() => import('./components/SettingsModal'));
 import { 
   Box, 
   Plus, 
@@ -879,87 +881,91 @@ export default function App() {
         </div>
       )}
 
-      {/* Global Modals */}
-      {activeViewerModel && (
-        <ViewerModal
-          model={activeViewerModel}
-          onClose={() => setActiveViewerModel(null)}
-          onOpenSlicer={(m, f) => {
-            setActiveSlicerModel(m);
-            setActiveSlicerFile(f);
-          }}
-          onDelete={handleDeleteModel}
-          onEdit={(m) => {
-            setActiveViewerModel(null);
-            setActiveEditModel(m);
-          }}
-          onToggleFavorite={handleToggleFavorite}
-          onModelUpdated={() => {
-            fetchModels();
-            fetchMetadata();
-            fetchSystemInfo();
-          }}
-          materialSettings={materialSettings}
-          onOpenSettings={() => setIsSettingsOpen(true)}
-        />
-      )}
+      {/* Global Modals (Code-split & lazy loaded on demand) */}
+      <Suspense fallback={null}>
+        {activeViewerModel && (
+          <ViewerModal
+            model={activeViewerModel}
+            onClose={() => setActiveViewerModel(null)}
+            onOpenSlicer={(m, f) => {
+              setActiveSlicerModel(m);
+              setActiveSlicerFile(f);
+            }}
+            onDelete={handleDeleteModel}
+            onEdit={(m) => {
+              setActiveViewerModel(null);
+              setActiveEditModel(m);
+            }}
+            onToggleFavorite={handleToggleFavorite}
+            onModelUpdated={() => {
+              fetchModels();
+              fetchMetadata();
+              fetchSystemInfo();
+            }}
+            materialSettings={materialSettings}
+            onOpenSettings={() => setIsSettingsOpen(true)}
+          />
+        )}
 
-      {activeSlicerModel && (
-        <SlicerModal
-          model={activeSlicerModel}
-          file={activeSlicerFile}
-          onClose={() => {
-            setActiveSlicerModel(null);
-            setActiveSlicerFile(null);
-          }}
-        />
-      )}
+        {activeSlicerModel && (
+          <SlicerModal
+            model={activeSlicerModel}
+            file={activeSlicerFile}
+            onClose={() => {
+              setActiveSlicerModel(null);
+              setActiveSlicerFile(null);
+            }}
+          />
+        )}
 
-      {activeEditModel && (
-        <EditModal
-          model={activeEditModel}
-          onClose={() => setActiveEditModel(null)}
-          onUpdated={() => {
-            fetchModels();
-            fetchMetadata();
-            fetchSystemInfo();
-          }}
-        />
-      )}
+        {activeEditModel && (
+          <EditModal
+            model={activeEditModel}
+            onClose={() => setActiveEditModel(null)}
+            onUpdated={() => {
+              fetchModels();
+              fetchMetadata();
+              fetchSystemInfo();
+            }}
+          />
+        )}
 
-      {isUploadOpen && (
-        <UploadModal
-          onClose={() => setIsUploadOpen(false)}
-          onUploadSuccess={() => {
-            fetchModels();
-            fetchMetadata();
-            fetchSystemInfo();
-          }}
-        />
-      )}
+        {isUploadOpen && (
+          <UploadModal
+            onClose={() => setIsUploadOpen(false)}
+            onUploadSuccess={() => {
+              fetchModels();
+              fetchMetadata();
+              fetchSystemInfo();
+            }}
+          />
+        )}
 
-      {isScannerOpen && (
-        <ScanModal
-          onClose={() => setIsScannerOpen(false)}
-          onScanComplete={() => {
-            fetchModels();
-            fetchMetadata();
-            fetchSystemInfo();
-          }}
-          systemInfo={systemInfo}
-          backgroundUpload={backgroundUpload}
-          onStartBackgroundUpload={startFolderUpload}
-        />
-      )}
+        {isScannerOpen && (
+          <ScanModal
+            onClose={() => setIsScannerOpen(false)}
+            onScanComplete={() => {
+              fetchModels();
+              fetchMetadata();
+              fetchSystemInfo();
+            }}
+            systemInfo={systemInfo}
+            backgroundUpload={backgroundUpload}
+            onStartBackgroundUpload={startFolderUpload}
+          />
+        )}
 
-      {/* Material Pricing & Cost Settings Modal */}
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        materialSettings={materialSettings}
-        onSaveSettings={handleSaveSettings}
-        onRecalculateWeights={handleRecalculateWeights}
-      />
+        {/* Material Pricing & Cost Settings Modal */}
+        {isSettingsOpen && (
+          <SettingsModal
+            isOpen={isSettingsOpen}
+            onClose={() => setIsSettingsOpen(false)}
+            materialSettings={materialSettings}
+            onSaveSettings={handleSaveSettings}
+            onRecalculateWeights={handleRecalculateWeights}
+          />
+        )}
+      </Suspense>
 
       {/* Footer with Dynamic Rev & Open Source info */}
       <Footer systemInfo={systemInfo} />
