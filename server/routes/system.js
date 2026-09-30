@@ -13,10 +13,20 @@ function getGitRevision() {
     try {
       count = execSync('git rev-list --count HEAD', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
     } catch {}
-    return count ? `r${count}.${rev}` : `r.${rev}`;
-  } catch (e) {
-    return 'rev-' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-b1';
-  }
+    if (count && rev) return `${count}.${rev}`;
+    if (rev) return rev;
+  } catch (e) {}
+
+  // Fallback to pre-generated version.json (essential for Docker and standalone bundles)
+  try {
+    const versionFile = new URL('../version.json', import.meta.url);
+    if (fs.existsSync(versionFile)) {
+      const parsed = JSON.parse(fs.readFileSync(versionFile, 'utf8'));
+      if (parsed.revision) return parsed.revision;
+    }
+  } catch {}
+
+  return '1.0.' + new Date().toISOString().slice(0, 10).replace(/-/g, '');
 }
 
 // GitHub Update Cache

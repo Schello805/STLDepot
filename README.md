@@ -143,14 +143,25 @@ Mit nur einem Klick wird das Modell an deinen installierten Slicer übergeben:
 - Erzeuge druckfertige Aufkleber mit Modell-Vorschau, Maßen, Filament-Typ und QR-Code.
 - Scanne den Code an deiner Sortierbox mit dem Handy, um sofort das 3D-Modell in der Web-App aufzurufen.
 
-### 5. 🔄 Ordner-Scanner & Multi-Worker Upload
+### 5. 🔄 Ordner-Scanner, Duplikaterkennung & Multi-Worker Upload
 - **Drop & Index:** Neue Dateien im Ordner `data/watch_import` werden automatisch im Hintergrund erfasst.
+- **Intelligente Duplikaterkennung:** Bereits importierte Modelle werden beim Ordner-Scan automatisch erkannt – du entscheidest flexibel zwischen *Überspringen* oder *Aktualisieren/Überschreiben* (inklusive automatischer Bereinigung alter 3D-Dateien).
 - **Paralleler Multi-Worker:** Große Sammlungen werden mit 4 parallelen Upload-Workern und Live-Fortschrittsbalken im Header blitzschnell importiert.
 - **Baugruppen-Erkennung:** Unterordner können wahlweise als zusammenhängendes mehrteiliges Projekt oder als Einzelkarten importiert werden.
 
-### 6. 🔄 Dynamische Revisionsnummer & Live-Update-Checker
-- Der Footer zeigt bei jedem Push eine automatisch hochzählende Revisionsnummer an (z. B. `Rev. r15.b246315`).
-- Sobald ein neuer Commit im GitHub-Repository bereitsteht, weist ein pulsierendes Badge im Footer direkt darauf hin.
+### 6. 💰 Materialpreis-Verwaltung & Druckkosten-Kalkulator
+- **Echtzeit-Kostenberechnung:** Die App berechnet anhand der tatsächlichen 3D-Modellgeometrie (Volumen in $\text{cm}^3$, Materialdichte und Infill-Faktor) das voraussichtliche Grammgewicht und die exakten Materialkosten.
+- **Individuelle Materialpreise (€/kg):** Verwalte in den Einstellungen Kilopreise und Dichten für PLA, PETG, ABS, ASA, TPU oder lege eigene Spezialmaterialien an.
+- **Kompakte 3er-Statusanzeige:** Jede Modellkarte zeigt übersichtlich `[ Material ] [ Gewicht ] [ Preis ]` in einer sauberen Zeile ohne störende Icons oder Zeilenumbrüche.
+- **1-Klick Neuberechnung:** Auf Knopfdruck können alle bestehenden Modelle in der Datenbank mit neuen Materialdichten oder Infill-Faktoren synchronisiert werden.
+
+### 7. 🛡️ Glassmorphic App-Dialoge (Keine Browser-Alerts)
+- **Moderne UX:** Alle nativen Browser-Popups (`window.alert`, `window.confirm`) wurden durch elegante, dunkle App-Modale im Glassmorphismus-Design mit Umgebungs-Glow ersetzt.
+- **Sicherheits-Confirms:** Vor dem unwiderruflichen Löschen von Modellen oder Teildateien wird eine klare Bestätigung mit Tastaturunterstützung (`Enter`/`Escape`) abgefragt.
+
+### 8. 🔄 Automatisch hochzählende Revisionsnummer & Live-Update-Checker
+- **Automatische Revisionsnummer:** Der Footer zählt mit jedem Commit & Push vollautomatisch hoch (Format: `Rev. <Commit-Anzahl>.<Git-Hash>`), sowohl in der lokalen Entwicklung als auch im Docker-Container.
+- **Live-Update-Erkennung:** Sobald ein neuer Commit im offiziellen GitHub-Repository vorhanden ist, signalisiert ein animiertes Update-Badge im Footer direkt die Aktualisierungsmöglichkeit.
 
 ---
 
@@ -161,15 +172,18 @@ STLDepot/
 ├── client/                     # Frontend (React 19 + Vite + Three.js + Tailwind CSS)
 │   ├── src/
 │   │   ├── components/         # Modals, Navbar, ModelCard, SlicerModal, 3D Canvas
-│   │   ├── utils/              # STL & 3MF Parser, Snapshot- & Farberkennung
+│   │   ├── context/            # DialogContext & useDialog Hook
+│   │   ├── utils/              # STL & 3MF Parser, ThreeUtils, CostCalculator
 │   │   └── App.jsx             # Haupt-App mit Responsive Grid & Lazy Load
 ├── server/                     # Backend (Node.js + Express)
 │   ├── routes/
 │   │   ├── models.js           # REST-API für Modelle, Upload & Batch-Operationen
 │   │   ├── system.js           # System-Info, Revisionszähler & Update-Checker
 │   │   └── webImport.js        # Web-Scraper für MakerWorld/Printables/Thingiverse
+│   ├── version.json            # Automatisch synchronisierte Git-Revision
 │   ├── scanner.js              # Automatischer Ordner-Scanner (chokidar)
 │   └── db.js                   # SQLite WAL-Modus Datenbank (better-sqlite3)
+├── scripts/                    # Build- & Revisions-Skripte (update-revision.js)
 ├── data/                       # Persistenter Datenspeicher
 │   ├── models/                 # Gespeicherte 3D-Dateien (.stl, .3mf)
 │   ├── thumbnails/             # Generierte Foto-Vorschauen

@@ -8,6 +8,7 @@
     "server": "node server/index.js",
     "client": "npm run dev --prefix client",
     "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "prebuild": "node scripts/update-revision.js",
     "build": "npm run build --prefix client",
     "start": "npm run build && node server/index.js"
   },
