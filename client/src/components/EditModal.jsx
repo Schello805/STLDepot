@@ -10,10 +10,12 @@ import {
   Layers,
   Upload
 } from 'lucide-react';
+import { useDialog } from '../context/DialogContext';
 
 export default function EditModal({ model, onClose, onUpdated }) {
   if (!model) return null;
 
+  const { confirm, alert } = useDialog();
   const [title, setTitle] = useState(model.title || '');
   const [description, setDescription] = useState(model.description || '');
   const [category, setCategory] = useState(model.category || 'Allgemein');
@@ -68,17 +70,43 @@ export default function EditModal({ model, onClose, onUpdated }) {
 
   const handleDeleteExistingFile = async (fileId) => {
     if (files.length <= 1) {
-      alert('Ein Modell muss mindestens eine Datei behalten. Lösche stattdessen das gesamte Modell.');
+      await alert({
+        title: 'Mindestens eine Datei erforderlich',
+        message: 'Ein Modell muss mindestens eine 3D-Datei behalten. Lösche stattdessen bitte das gesamte Modell.',
+        type: 'warning'
+      });
       return;
     }
+
+    const targetFile = files.find(f => f.id === fileId);
+    const confirmed = await confirm({
+      title: 'Datei entfernen',
+      message: `Möchtest du die Datei "${targetFile?.original_filename || '3D-Datei'}" wirklich aus diesem Modell löschen?`,
+      confirmText: 'Datei löschen',
+      cancelText: 'Abbrechen',
+      type: 'danger'
+    });
+    if (!confirmed) return;
 
     try {
       const res = await fetch(`/api/models/${model.id}/files/${fileId}`, { method: 'DELETE' });
       if (res.ok) {
         setFiles(prev => prev.filter(f => f.id !== fileId));
+      } else {
+        const data = await res.json().catch(() => ({}));
+        await alert({
+          title: 'Fehler beim Löschen',
+          message: data.error || 'Datei konnte nicht gelöscht werden.',
+          type: 'error'
+        });
       }
     } catch (err) {
       console.error('Failed to delete file:', err);
+      await alert({
+        title: 'Fehler beim Löschen',
+        message: 'Ein Netzwerkfehler ist beim Löschen der Datei aufgetreten.',
+        type: 'error'
+      });
     }
   };
 

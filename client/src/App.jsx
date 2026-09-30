@@ -29,8 +29,10 @@ import {
   Check
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { useDialog } from './context/DialogContext';
 
 export default function App() {
+  const { confirm, alert } = useDialog();
   const [models, setModels] = useState([]);
   const [categories, setCategories] = useState([]);
   const [tags, setTags] = useState([]);
@@ -416,9 +418,14 @@ export default function App() {
   };
 
   const handleDeleteModel = async (model) => {
-    if (!window.confirm(`Möchtest du das Modell "${model.title}" wirklich unwiderruflich löschen?`)) {
-      return;
-    }
+    const confirmed = await confirm({
+      title: 'Modell löschen',
+      message: `Möchtest du das Modell "${model.title}" wirklich unwiderruflich löschen?\nAlle zugehörigen Dateien werden von der Festplatte entfernt.`,
+      confirmText: 'Modell löschen',
+      cancelText: 'Abbrechen',
+      type: 'danger'
+    });
+    if (!confirmed) return;
 
     try {
       const res = await fetch(`/api/models/${model.id}`, { method: 'DELETE' });
@@ -427,9 +434,21 @@ export default function App() {
         fetchModels();
         fetchMetadata();
         fetchSystemInfo();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        await alert({
+          title: 'Fehler beim Löschen',
+          message: data.error || 'Das Modell konnte nicht gelöscht werden.',
+          type: 'error'
+        });
       }
     } catch (err) {
       console.error('Failed to delete model:', err);
+      await alert({
+        title: 'Fehler beim Löschen',
+        message: 'Ein Netzwerkfehler ist beim Löschen des Modells aufgetreten.',
+        type: 'error'
+      });
     }
   };
 
@@ -450,9 +469,14 @@ export default function App() {
 
   const handleBatchDelete = async () => {
     if (selectedIds.length === 0) return;
-    if (!window.confirm(`Möchtest du wirklich alle ${selectedIds.length} ausgewählten Modelle unwiderruflich löschen?`)) {
-      return;
-    }
+    const confirmed = await confirm({
+      title: 'Ausgewählte Modelle löschen',
+      message: `Möchtest du wirklich alle ${selectedIds.length} ausgewählten Modelle unwiderruflich löschen?`,
+      confirmText: `${selectedIds.length} Modelle löschen`,
+      cancelText: 'Abbrechen',
+      type: 'danger'
+    });
+    if (!confirmed) return;
 
     setIsProcessingBatch(true);
     try {
@@ -467,9 +491,20 @@ export default function App() {
         fetchModels();
         fetchMetadata();
         fetchSystemInfo();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        await alert({
+          title: 'Fehler beim Löschen',
+          message: data.error || 'Fehler beim Löschen der Modelle',
+          type: 'error'
+        });
       }
     } catch (err) {
-      alert('Fehler beim Löschen der Modelle');
+      await alert({
+        title: 'Fehler beim Löschen',
+        message: 'Ein Netzwerkfehler ist beim Löschen aufgetreten.',
+        type: 'error'
+      });
     } finally {
       setIsProcessingBatch(false);
     }
@@ -490,9 +525,20 @@ export default function App() {
         setSelectionMode(false);
         fetchModels();
         fetchMetadata();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        await alert({
+          title: 'Fehler beim Verschieben',
+          message: data.error || 'Fehler beim Verschieben der Modelle.',
+          type: 'error'
+        });
       }
     } catch (err) {
-      alert('Fehler beim Verschieben');
+      await alert({
+        title: 'Fehler beim Verschieben',
+        message: 'Ein Netzwerkfehler ist beim Verschieben aufgetreten.',
+        type: 'error'
+      });
     } finally {
       setIsProcessingBatch(false);
     }

@@ -13,6 +13,7 @@ import {
   Sparkles,
   Layers
 } from 'lucide-react';
+import { useDialog } from '../context/DialogContext';
 
 export default function SettingsModal({ 
   isOpen, 
@@ -21,6 +22,7 @@ export default function SettingsModal({
   onSaveSettings,
   onRecalculateWeights 
 }) {
+  const { confirm, alert } = useDialog();
   const [settings, setSettings] = useState({
     materials: [
       { id: 'PLA', name: 'PLA', density: 1.24, price_per_kg: 19.99, color: '#38bdf8' },
@@ -62,22 +64,41 @@ export default function SettingsModal({
     setSettings({ ...settings, materials: updated });
   };
 
-  const handleDeleteMaterial = (index) => {
+  const handleDeleteMaterial = async (index) => {
     if (settings.materials.length <= 1) {
-      alert('Mindestens ein Material muss vorhanden bleiben.');
+      await alert({
+        title: 'Aktion nicht möglich',
+        message: 'Mindestens ein Material muss im System vorhanden bleiben.',
+        type: 'warning'
+      });
       return;
     }
+
+    const mat = settings.materials[index];
+    const confirmed = await confirm({
+      title: 'Material löschen',
+      message: `Möchtest du das Material "${mat?.name || mat?.id}" wirklich aus der Preisliste entfernen?`,
+      confirmText: 'Löschen',
+      cancelText: 'Abbrechen',
+      type: 'danger'
+    });
+    if (!confirmed) return;
+
     const updated = settings.materials.filter((_, i) => i !== index);
     setSettings({ ...settings, materials: updated });
   };
 
-  const handleAddMaterial = (e) => {
+  const handleAddMaterial = async (e) => {
     e.preventDefault();
     const cleanName = newMatName.trim().toUpperCase();
     if (!cleanName) return;
 
     if (settings.materials.some(m => (m.id || m.name).toUpperCase() === cleanName)) {
-      alert(`Das Material "${cleanName}" existiert bereits.`);
+      await alert({
+        title: 'Material existiert bereits',
+        message: `Das Material "${cleanName}" ist bereits in deiner Liste vorhanden.`,
+        type: 'warning'
+      });
       return;
     }
 
