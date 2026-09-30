@@ -247,6 +247,166 @@ router.put('/settings', (req, res) => {
   }
 });
 
+// GET /api/system/backup/json - Export database metadata & settings as clean JSON
+router.get('/backup/json', (req, res) => {
+  try {
+    const dateStr = new Date().toISOString().slice(0, 10);
+    res.attachment(`stldepot-backup-${dateStr}.json`);
+    res.setHeader('Content-Type', 'application/json');
+
+    const settingsRows = db.prepare('SELECT key, value FROM settings').all();
+    const settings = {};
+    for (const row of settingsRows) {
+      try {
+        settings[row.key] = JSON.parse(row.value);
+      } catch {
+        settings[row.key] = row.value;
+      }
+    }
+
+    const tags = db.prepare('SELECT id, name FROM tags').all();
+    const projects = db.prepare('SELECT * FROM projects').all();
+    const getFiles = db.prepare('SELECT id, filename, original_name, file_size, file_type, volume_cm3, triangle_count FROM project_files WHERE project_id = ?');
+    const getTags = db.prepare('SELECT t.name FROM tags t INNER JOIN project_tags pt ON t.id = pt.tag_id WHERE pt.project_id = ?');
+
+    const enrichedProjects = projects.map(p => ({
+      ...p,
+      files: getFiles.all(p.id),
+      tags: getTags.all(p.id).map(t => t.name)
+    }));
+
+    const backupData = {
+      backupVersion: '1.0',
+      exportedAt: new Date().toISOString(),
+      app: 'STLDepot',
+      settings,
+      tags: tags.map(t => t.name),
+      projectCount: enrichedProjects.length,
+      projects: enrichedProjects
+    };
+
+    res.send(JSON.stringify(backupData, null, 2));
+  } catch (err) {
+    console.error('JSON Backup failed:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/system/restore/json - Restore database metadata & settings from JSON
+router.post('/restore/json', express.json({ limit: '50mb' }), (req, res) => {
+  try {
+    const backup = req.body;
+    if (!backup || (!Array.isArray(backup.projects) && !backup.settings)) {
+      return res.status(400).json({ success: false, error: 'Ungültige Backup-Datei' });
+    }
+
+    let restoredSettings = 0;
+    let restoredProjects = 0;
+    let restoredTags = 0;
+
+    const transaction = db.transaction(() => {
+      // 1. Restore Settings
+      if (backup.settings && typeof backup.settings === 'object') {
+        const insertSetting = db.prepare(`
+          INSERT INTO settings (key, value) VALUES (?, ?)
+          ON CONFLICT(key) DO UPDATE SET value = excluded.value
+        `);
+        for (const [key, val] of Object.entries(backup.settings)) {
+          insertSetting.run(key, typeof val === 'object' ? JSON.stringify(val) : String(val));
+          restoredSettings++;
+        }
+      }
+
+      // 2. Restore Tags
+      const insertTag = db.prepare('INSERT OR IGNORE INTO tags (name) VALUES (?)');
+      const getTagId = db.prepare('SELECT id FROM tags WHERE name = ?');
+      if (Array.isArray(backup.tags)) {
+        for (const tagName of backup.tags) {
+          if (tagName && typeof tagName === 'string') {
+            insertTag.run(tagName.trim());
+            restoredTags++;
+          }
+        }
+      }
+
+      // 3. Restore Projects metadata
+      if (Array.isArray(backup.projects)) {
+        const updateProject = db.prepare(`
+          UPDATE projects SET
+            title = COALESCE(?, title),
+            description = COALESCE(?, description),
+            category = COALESCE(?, category),
+            author = COALESCE(?, author),
+            filament_type = COALESCE(?, filament_type),
+            filament_color = COALESCE(?, filament_color),
+            infill_percentage = COALESCE(?, infill_percentage),
+            print_time_minutes = COALESCE(?, print_time_minutes),
+            nozzle_size = COALESCE(?, nozzle_size),
+            supports_needed = COALESCE(?, supports_needed),
+            is_favorite = COALESCE(?, is_favorite),
+            notes = COALESCE(?, notes),
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `);
+
+        const insertProject = db.prepare(`
+          INSERT OR IGNORE INTO projects (
+            id, title, description, category, author, filament_type, filament_color,
+            infill_percentage, print_time_minutes, nozzle_size, supports_needed, is_favorite, notes
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+
+        const insertProjectTag = db.prepare('INSERT OR IGNORE INTO project_tags (project_id, tag_id) VALUES (?, ?)');
+
+        for (const p of backup.projects) {
+          if (!p.id || !p.title) continue;
+
+          // Try updating existing project
+          const result = updateProject.run(
+            p.title, p.description, p.category, p.author, p.filament_type, p.filament_color,
+            p.infill_percentage, p.print_time_minutes, p.nozzle_size, p.supports_needed, p.is_favorite, p.notes,
+            p.id
+          );
+
+          if (result.changes === 0) {
+            // Insert new metadata
+            insertProject.run(
+              p.id, p.title, p.description || '', p.category || 'Allgemein', p.author || '',
+              p.filament_type || 'PLA', p.filament_color || '#38bdf8',
+              p.infill_percentage || 15, p.print_time_minutes || null, p.nozzle_size || 0.4,
+              p.supports_needed ? 1 : 0, p.is_favorite ? 1 : 0, p.notes || ''
+            );
+          }
+
+          // Restore Tags
+          if (Array.isArray(p.tags)) {
+            for (const t of p.tags) {
+              insertTag.run(t);
+              const tagRow = getTagId.get(t);
+              if (tagRow) {
+                insertProjectTag.run(p.id, tagRow.id);
+              }
+            }
+          }
+
+          restoredProjects++;
+        }
+      }
+    });
+
+    transaction();
+
+    res.json({
+      success: true,
+      message: `Backup erfolgreich wiederhergestellt! (${restoredProjects} Modelle, ${restoredSettings} Einstellungen synchronisiert)`,
+      stats: { restoredProjects, restoredSettings, restoredTags }
+    });
+  } catch (err) {
+    console.error('JSON Restore failed:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // POST /api/system/recalculate-weights - Calculate/refresh weights for all models
 router.post('/recalculate-weights', async (req, res) => {
   try {

@@ -30,7 +30,7 @@ const upload = multer({
 // GET /api/models - List models with search, category, tag, and sort filters
 router.get('/', (req, res) => {
   try {
-    const { search, category, tag, sort = 'newest', favorite } = req.query;
+    const { search, category, tag, sort = 'newest', favorite, filament, printTime } = req.query;
 
     let query = `
       SELECT 
@@ -67,6 +67,19 @@ router.get('/', (req, res) => {
       params.push(tag);
     }
 
+    if (filament && filament !== 'Alle') {
+      query += ` AND UPPER(p.filament_type) = ?`;
+      params.push(filament.toUpperCase());
+    }
+
+    if (printTime === 'short') {
+      query += ` AND p.print_time_minutes > 0 AND p.print_time_minutes <= 120`;
+    } else if (printTime === 'medium') {
+      query += ` AND p.print_time_minutes > 120 AND p.print_time_minutes <= 360`;
+    } else if (printTime === 'long') {
+      query += ` AND p.print_time_minutes > 360`;
+    }
+
     query += ` GROUP BY p.id`;
 
     if (sort === 'oldest') {
@@ -77,6 +90,10 @@ router.get('/', (req, res) => {
       query += ` ORDER BY p.title DESC`;
     } else if (sort === 'print_time') {
       query += ` ORDER BY p.print_time_minutes DESC`;
+    } else if (sort === 'weight_asc') {
+      query += ` ORDER BY p.weight_grams ASC`;
+    } else if (sort === 'weight_desc') {
+      query += ` ORDER BY p.weight_grams DESC`;
     } else {
       query += ` ORDER BY p.created_at DESC`;
     }
@@ -817,6 +834,44 @@ router.post('/batch-category', (req, res) => {
     transaction(ids, category);
     res.json({ success: true, message: `${ids.length} Modelle in "${category}" verschoben` });
   } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/models/batch-download - Download multiple selected models as a single ZIP archive
+router.post('/batch-download', (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, error: 'Keine Modell-IDs angegeben' });
+    }
+
+    const placeholders = ids.map(() => '?').join(',');
+    const projects = db.prepare(`SELECT * FROM projects WHERE id IN (${placeholders})`).all(...ids);
+    if (projects.length === 0) {
+      return res.status(404).json({ success: false, error: 'Keine Modelle gefunden' });
+    }
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    res.attachment(`stldepot-sammlung-${dateStr}.zip`);
+
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    archive.pipe(res);
+
+    for (const project of projects) {
+      const safeTitle = (project.title || 'Modell').replace(/[^a-zA-Z0-9äöüÄÖÜß-_ ]/g, '_').trim();
+      const files = db.prepare('SELECT * FROM project_files WHERE project_id = ?').all(project.id);
+
+      for (const file of files) {
+        if (fs.existsSync(file.file_path)) {
+          archive.file(file.file_path, { name: `${safeTitle}/${file.original_name}` });
+        }
+      }
+    }
+
+    archive.finalize();
+  } catch (err) {
+    console.error('Batch download failed:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });

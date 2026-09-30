@@ -30,7 +30,11 @@ export default function Navbar({
   setDarkMode,
   sortBy,
   setSortBy,
-  backgroundUpload
+  backgroundUpload,
+  selectedFilament = 'Alle',
+  setSelectedFilament,
+  selectedPrintTime = 'Alle',
+  setSelectedPrintTime
 }) {
   return (
     <header className="sticky top-0 z-40 w-full backdrop-blur-2xl bg-slate-900/90 border-b border-slate-700/70 shadow-lg shadow-black/20 transition-colors">
@@ -202,9 +206,42 @@ export default function Navbar({
             ))}
           </div>
 
-          {/* Sort Selector */}
+          {/* Filter & Sort Controls */}
           <div className="flex items-center gap-2 min-w-max text-slate-400">
-            <span className="text-[11px] font-medium hidden md:inline">Sortierung:</span>
+            {/* Filament / Material Filter */}
+            {setSelectedFilament && (
+              <select
+                value={selectedFilament}
+                onChange={(e) => setSelectedFilament(e.target.value)}
+                className="bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-lg px-2.5 py-1 focus:outline-none focus:border-cyan-500 transition cursor-pointer"
+                title="Nach Filament-Material filtern"
+              >
+                <option value="Alle">Material: Alle</option>
+                <option value="PLA">PLA</option>
+                <option value="PETG">PETG</option>
+                <option value="ABS">ABS</option>
+                <option value="ASA">ASA</option>
+                <option value="TPU">TPU / Flex</option>
+              </select>
+            )}
+
+            {/* Print Time Filter */}
+            {setSelectedPrintTime && (
+              <select
+                value={selectedPrintTime}
+                onChange={(e) => setSelectedPrintTime(e.target.value)}
+                className="bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-lg px-2.5 py-1 focus:outline-none focus:border-cyan-500 transition cursor-pointer"
+                title="Nach geschätzter Druckzeit filtern"
+              >
+                <option value="Alle">Druckzeit: Alle</option>
+                <option value="short">&lt; 2 Std. (Schnell)</option>
+                <option value="medium">2 – 6 Std. (Mittel)</option>
+                <option value="long">&gt; 6 Std. (Groß)</option>
+              </select>
+            )}
+
+            {/* Sort Selector */}
+            <span className="text-[11px] font-medium hidden md:inline ml-1">Sortierung:</span>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
@@ -215,6 +252,8 @@ export default function Navbar({
               <option value="title_asc">Name (A-Z)</option>
               <option value="title_desc">Name (Z-A)</option>
               <option value="print_time">Druckzeit (Längste)</option>
+              <option value="weight_asc">Gewicht (Leichteste)</option>
+              <option value="weight_desc">Gewicht (Schwerste)</option>
             </select>
           </div>
         </div>

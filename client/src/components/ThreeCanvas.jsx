@@ -16,8 +16,20 @@ import {
   Scissors,
   Crosshair,
   Trash2,
-  Check
+  Check,
+  CheckCircle2,
+  AlertTriangle
 } from 'lucide-react';
+
+export const BUILD_PLATE_PRESETS = [
+  { id: 'bambu', name: 'Bambu Lab X1/P1/A1', x: 256, z: 256, height: 256 },
+  { id: 'prusa_mk4', name: 'Prusa MK4/MK3S+', x: 250, z: 210, height: 220 },
+  { id: 'kobra_3', name: 'Anycubic Kobra 2/3', x: 220, z: 220, height: 250 },
+  { id: 'ender_3', name: 'Creality Ender 3/K1', x: 220, z: 220, height: 250 },
+  { id: 'voron_300', name: 'Voron 2.4 (300mm)', x: 300, z: 300, height: 300 },
+  { id: 'elegoo_plus', name: 'Elegoo Neptune 4 Plus', x: 320, z: 320, height: 385 },
+  { id: 'standard', name: 'Standard (250×250)', x: 250, z: 250, height: 250 }
+];
 
 export default function ThreeCanvas({ 
   fileUrl, 
@@ -43,6 +55,7 @@ export default function ThreeCanvas({
   const [materialMode, setMaterialMode] = useState('standard'); // standard, wireframe, normal, metallic
   const [autoRotate, setAutoRotate] = useState(false);
   const [showGrid, setShowGrid] = useState(false);
+  const [selectedBedId, setSelectedBedId] = useState('bambu');
   const [showBBox, setShowBBox] = useState(false);
   const [stats, setStats] = useState(null);
   const [hasMultiColor, setHasMultiColor] = useState(false);
@@ -302,12 +315,23 @@ export default function ThreeCanvas({
     meshRef.current.material = createMaterial(materialMode, color, clippingActive, meshRef.current.geometry);
   }, [color, materialMode, clippingActive, clippingAxis, clippingValue]);
 
-  // Update Grid / BBox visibility
+  // Update Grid / BBox visibility and Build Plate Dimensions
   useEffect(() => {
-    if (gridRef.current) gridRef.current.visible = showGrid;
-    if (bedMeshRef.current) bedMeshRef.current.visible = showGrid;
+    const activeBed = BUILD_PLATE_PRESETS.find(p => p.id === selectedBedId) || BUILD_PLATE_PRESETS[0];
+
+    if (gridRef.current) {
+      gridRef.current.visible = showGrid;
+      gridRef.current.scale.set(activeBed.x / 250, 1, activeBed.z / 250);
+    }
+    if (bedMeshRef.current) {
+      bedMeshRef.current.visible = showGrid;
+      if (bedMeshRef.current.geometry) {
+        bedMeshRef.current.geometry.dispose();
+      }
+      bedMeshRef.current.geometry = new THREE.PlaneGeometry(activeBed.x, activeBed.z);
+    }
     if (bboxHelperRef.current) bboxHelperRef.current.visible = showBBox;
-  }, [showGrid, showBBox]);
+  }, [showGrid, selectedBedId, showBBox]);
 
   function createMaterial(mode, col, isClipping = false, geom = null) {
     const planes = isClipping ? [clipPlaneRef.current] : [];
@@ -815,18 +839,60 @@ export default function ThreeCanvas({
         </div>
       )}
 
-      {/* Live Dimension HUD overlay (only if not measuring to prevent clutter) */}
-      {stats && !loading && !error && !measureMode && !clippingActive && (
-        <div className="absolute top-14 left-3 px-2.5 py-1.5 rounded-lg bg-slate-950/75 backdrop-blur-md border border-slate-800 text-[11px] font-mono text-cyan-300/90 pointer-events-none shadow-md space-y-0.5">
-          <div className="flex items-center gap-1.5 font-semibold text-slate-300">
-            <Box className="w-3 h-3 text-cyan-400" />
-            <span>{stats.dimensions.x} × {stats.dimensions.y} × {stats.dimensions.z} mm</span>
+      {/* Live Dimension HUD overlay with Build Plate Fit Check */}
+      {stats && !loading && !error && !measureMode && !clippingActive && (() => {
+        const activeBed = BUILD_PLATE_PRESETS.find(p => p.id === selectedBedId) || BUILD_PLATE_PRESETS[0];
+        const fitsBed = stats.dimensions.x <= activeBed.x && stats.dimensions.z <= activeBed.z && stats.dimensions.y <= activeBed.height;
+
+        return (
+          <div className="absolute top-14 left-3 px-3 py-2 rounded-xl bg-slate-950/85 backdrop-blur-md border border-slate-800 text-[11px] font-mono text-cyan-300/90 shadow-md space-y-1.5 pointer-events-auto">
+            <div className="flex items-center gap-1.5 font-semibold text-slate-200">
+              <Box className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+              <span>{stats.dimensions.x} × {stats.dimensions.y} × {stats.dimensions.z} mm</span>
+            </div>
+            <div className="text-slate-400">
+              Volumen: <span className="text-slate-200">{stats.volumeCm3} cm³</span> (~{stats.estimatedWeightGrams}g)
+            </div>
+
+            {/* Build Plate Selector & Fit Indicator */}
+            {showGrid && (
+              <div className="pt-1.5 border-t border-slate-800/80 space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] text-slate-400 uppercase font-semibold">Druckbett:</span>
+                  <select
+                    value={selectedBedId}
+                    onChange={(e) => setSelectedBedId(e.target.value)}
+                    className="bg-slate-900 border border-slate-700 text-slate-200 text-[10px] rounded px-1.5 py-0.5 focus:outline-none focus:border-cyan-500 cursor-pointer"
+                  >
+                    {BUILD_PLATE_PRESETS.map((b) => (
+                      <option key={b.id} value={b.id}>{b.name} ({b.x}×{b.z})</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Fit Result Badge */}
+                <div className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded ${
+                  fitsBed
+                    ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                    : 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
+                }`}>
+                  {fitsBed ? (
+                    <>
+                      <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
+                      <span>Passt auf {activeBed.name}</span>
+                    </>
+                  ) : (
+                    <>
+                      <AlertTriangle className="w-3 h-3 text-rose-400 shrink-0" />
+                      <span>Zu groß für {activeBed.name}!</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
-          <div className="text-slate-400">
-            Volumen: <span className="text-slate-200">{stats.volumeCm3} cm³</span> (~{stats.estimatedWeightGrams}g)
-          </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

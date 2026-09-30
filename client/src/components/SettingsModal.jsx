@@ -11,7 +11,10 @@ import {
   AlertCircle, 
   HelpCircle,
   Sparkles,
-  Layers
+  Layers,
+  Download,
+  Upload,
+  Database
 } from 'lucide-react';
 import { useDialog } from '../context/DialogContext';
 
@@ -43,6 +46,8 @@ export default function SettingsModal({
   const [newMatPrice, setNewMatPrice] = useState('24.99');
   const [newMatColor, setNewMatColor] = useState('#06b6d4');
   const [showAddForm, setShowAddForm] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const restoreFileInputRef = React.useRef(null);
 
   useEffect(() => {
     if (materialSettings && materialSettings.materials) {
@@ -149,6 +154,61 @@ export default function SettingsModal({
       setStatusMessage({ type: 'error', text: err.message || 'Fehler bei der Neuberechnung' });
     } finally {
       setRecalculating(false);
+    }
+  };
+
+  const handleDownloadBackup = () => {
+    window.location.href = '/api/system/backup/json';
+  };
+
+  const handleRestoreFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const json = JSON.parse(text);
+
+      const confirmed = await confirm({
+        title: 'JSON-Backup wiederherstellen',
+        message: `Möchtest du das Backup vom ${json.exportedAt ? new Date(json.exportedAt).toLocaleDateString() : 'unbekannten Datum'} mit ${json.projectCount || json.projects?.length || 0} Modellen wirklich importieren?`,
+        confirmText: 'Jetzt wiederherstellen',
+        cancelText: 'Abbrechen',
+        type: 'warning'
+      });
+      if (!confirmed) {
+        if (restoreFileInputRef.current) restoreFileInputRef.current.value = '';
+        return;
+      }
+
+      setRestoring(true);
+      const res = await fetch('/api/system/restore/json', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(json)
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Wiederherstellung fehlgeschlagen');
+      }
+
+      await alert({
+        title: 'Wiederherstellung erfolgreich',
+        message: data.message,
+        type: 'success'
+      });
+
+      window.location.reload();
+    } catch (err) {
+      console.error('Restore error:', err);
+      await alert({
+        title: 'Fehler beim Wiederherstellen',
+        message: err.message || 'Die Datei ist kein gültiges STLDepot-Backup.',
+        type: 'error'
+      });
+    } finally {
+      setRestoring(false);
+      if (restoreFileInputRef.current) restoreFileInputRef.current.value = '';
     }
   };
 
@@ -403,6 +463,45 @@ export default function SettingsModal({
                   </div>
                 );
               })}
+            </div>
+          </div>
+
+          {/* Backup & Restore JSON Section */}
+          <div className="p-4 rounded-xl bg-slate-850/60 border border-slate-750 space-y-3">
+            <div className="flex items-center gap-2">
+              <Database className="w-4 h-4 text-cyan-400" />
+              <h4 className="text-sm font-bold text-white">Datenbank-Sicherung (JSON)</h4>
+            </div>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Exportiere alle Metadaten, Tags, Beschreibungen und Materialpreise als strukturierte JSON-Datei oder spiele ein vorhandenes Backup mit 1 Klick wieder ein.
+            </p>
+            <div className="flex items-center gap-3 pt-1 flex-wrap">
+              <button
+                type="button"
+                onClick={handleDownloadBackup}
+                className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold shadow-sm transition active:scale-95"
+              >
+                <Download className="w-3.5 h-3.5 text-cyan-400" />
+                <span>JSON-Backup herunterladen</span>
+              </button>
+
+              <input
+                ref={restoreFileInputRef}
+                type="file"
+                accept=".json,application/json"
+                className="hidden"
+                onChange={handleRestoreFile}
+              />
+
+              <button
+                type="button"
+                disabled={restoring}
+                onClick={() => restoreFileInputRef.current?.click()}
+                className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold shadow-sm transition active:scale-95 disabled:opacity-50"
+              >
+                <Upload className={`w-3.5 h-3.5 text-emerald-400 ${restoring ? 'animate-bounce' : ''}`} />
+                <span>{restoring ? 'Stelle wieder her...' : 'JSON-Backup wiederherstellen'}</span>
+              </button>
             </div>
           </div>
         </div>

@@ -26,7 +26,8 @@ import {
   Trash2,
   FolderInput,
   X,
-  Check
+  Check,
+  Download
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useDialog } from './context/DialogContext';
@@ -49,6 +50,8 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Alle');
   const [selectedTag, setSelectedTag] = useState('');
+  const [selectedFilament, setSelectedFilament] = useState('Alle');
+  const [selectedPrintTime, setSelectedPrintTime] = useState('Alle');
   const [onlyFavorites, setOnlyFavorites] = useState(false);
   const [sortBy, setSortBy] = useState('newest');
   const [darkMode, setDarkMode] = useState(true);
@@ -133,6 +136,8 @@ export default function App() {
       if (searchQuery) params.append('search', searchQuery);
       if (selectedCategory && selectedCategory !== 'Alle') params.append('category', selectedCategory);
       if (selectedTag) params.append('tag', selectedTag);
+      if (selectedFilament && selectedFilament !== 'Alle') params.append('filament', selectedFilament);
+      if (selectedPrintTime && selectedPrintTime !== 'Alle') params.append('printTime', selectedPrintTime);
       if (onlyFavorites) params.append('favorite', 'true');
       if (sortBy) params.append('sort', sortBy);
 
@@ -146,7 +151,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, selectedCategory, selectedTag, onlyFavorites, sortBy]);
+  }, [searchQuery, selectedCategory, selectedTag, selectedFilament, selectedPrintTime, onlyFavorites, sortBy]);
 
   // Fetch Material Pricing Settings
   const fetchSettings = useCallback(async () => {
@@ -510,6 +515,40 @@ export default function App() {
     }
   };
 
+  const handleBatchDownload = async () => {
+    if (selectedIds.length === 0) return;
+    setIsProcessingBatch(true);
+    try {
+      const res = await fetch('/api/models/batch-download', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: selectedIds })
+      });
+      if (!res.ok) {
+        throw new Error('Sammel-Download fehlgeschlagen');
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `stldepot-sammlung-${new Date().toISOString().slice(0, 10)}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      confetti({ particleCount: 50, spread: 70 });
+    } catch (err) {
+      console.error('Batch download error:', err);
+      await alert({
+        title: 'Fehler beim Herunterladen',
+        message: 'Die ausgewählten Modelle konnten nicht als ZIP exportiert werden.',
+        type: 'error'
+      });
+    } finally {
+      setIsProcessingBatch(false);
+    }
+  };
+
   const handleBatchMoveCategory = async (cat) => {
     if (selectedIds.length === 0 || !cat) return;
     setIsProcessingBatch(true);
@@ -582,6 +621,10 @@ export default function App() {
         sortBy={sortBy}
         setSortBy={setSortBy}
         backgroundUpload={backgroundUpload}
+        selectedFilament={selectedFilament}
+        setSelectedFilament={setSelectedFilament}
+        selectedPrintTime={selectedPrintTime}
+        setSelectedPrintTime={setSelectedPrintTime}
       />
 
       {/* Main Container - 92% Width for Modern Widescreen */}
@@ -798,6 +841,17 @@ export default function App() {
               <option value="Gadgets & Elektronik">Gadgets & Elektronik</option>
               <option value="Gaming & Tabletop">Gaming & Tabletop</option>
             </select>
+
+            {/* Batch Download ZIP */}
+            <button
+              onClick={handleBatchDownload}
+              disabled={isProcessingBatch}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 text-xs font-bold border border-cyan-700/80 transition shadow-sm"
+              title="Alle ausgewählten Modelle als gemeinsame ZIP herunterladen"
+            >
+              <Download className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Sammel-ZIP</span>
+            </button>
 
             {/* Batch Delete */}
             <button
