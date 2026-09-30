@@ -859,7 +859,7 @@ router.post('/batch-download', (req, res) => {
     archive.pipe(res);
 
     for (const project of projects) {
-      const safeTitle = (project.title || 'Modell').replace(/[^a-zA-Z0-9äöüÄÖÜß-_ ]/g, '_').trim();
+      const safeTitle = (project.title || 'Modell').replace(/[^a-zA-Z0-9äöüÄÖÜß_\- ]/g, '_').trim();
       const files = db.prepare('SELECT * FROM project_files WHERE project_id = ?').all(project.id);
 
       for (const file of files) {
@@ -895,7 +895,7 @@ router.get('/:id/download', (req, res) => {
       return res.download(f.file_path, f.original_name);
     }
 
-    const safeTitle = project.title.replace(/[^a-zA-Z0-9-_]/g, '_');
+    const safeTitle = (project.title || 'Modell').replace(/[^a-zA-Z0-9_\-]/g, '_');
     res.attachment(`${safeTitle}.zip`);
 
     const archive = archiver('zip', { zlib: { level: 9 } });

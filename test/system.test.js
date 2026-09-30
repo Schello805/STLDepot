@@ -25,4 +25,13 @@ describe('System, Revision & Version Sync', () => {
     assert.ok(pkg.scripts.build, 'package.json must contain build script');
     assert.ok(pkg.scripts.test, 'package.json must contain test script');
   });
+
+  it('sanitizes titles with umlauts and symbols without regex range syntax error', () => {
+    const testTitle = 'Gehäuse für Lötkolben & Zubehör_1 - äöüÄÖÜß';
+    const safeBatchTitle = testTitle.replace(/[^a-zA-Z0-9äöüÄÖÜß_\- ]/g, '_').trim();
+    assert.equal(safeBatchTitle, 'Gehäuse für Lötkolben _ Zubehör_1 - äöüÄÖÜß');
+
+    const safeDownloadTitle = testTitle.replace(/[^a-zA-Z0-9_\-]/g, '_');
+    assert.equal(safeDownloadTitle, 'Geh_use_f_r_L_tkolben___Zubeh_r_1_-________');
+  });
 });
