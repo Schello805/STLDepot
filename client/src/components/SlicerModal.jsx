@@ -37,6 +37,20 @@ export default function SlicerModal({ model, file, onClose }) {
       badge: 'Bambu Lab'
     },
     {
+      name: 'Anycubic Slicer',
+      desc: 'Offizieller Slicer für Anycubic Kobra 2 / 3 & ACE Pro Multi-Color',
+      icon: '🔷',
+      scheme: `anycubicslicer://open?file=${encodeURIComponent(fileDownloadUrl)}`,
+      badge: 'Anycubic FDM'
+    },
+    {
+      name: 'Anycubic Photon',
+      desc: 'Slicer & Support-Generator für Anycubic Photon Mono & M-Serie',
+      icon: '🧪',
+      scheme: `photonworkshop://open?file=${encodeURIComponent(fileDownloadUrl)}`,
+      badge: 'Anycubic Resin'
+    },
+    {
       name: 'PrusaSlicer',
       desc: 'Präziser Slicer für Original Prusa, MMU & Universal-Drucker',
       icon: '🔶',
@@ -66,7 +80,7 @@ export default function SlicerModal({ model, file, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
       <div 
-        className="relative w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col"
+        className="relative w-full max-w-3xl bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -94,8 +108,8 @@ export default function SlicerModal({ model, file, onClose }) {
             Wähle deinen installierten Slicer für eine direkte Übergabe oder lade die Modelldatei herunter:
           </p>
 
-          {/* Slicer Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* Slicer Cards (3 Columns) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
             {slicers.map((slicer) => (
               <button
                 key={slicer.name}

@@ -2,7 +2,6 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
-import fetch from 'node-fetch';
 import { db, MODELS_DIR, THUMBNAILS_DIR } from '../db.js';
 
 const router = express.Router();

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Navbar from './components/Navbar';
 import ModelCard from './components/ModelCard';
 import ViewerModal from './components/ViewerModal';
@@ -36,6 +36,12 @@ export default function App() {
   const [systemInfo, setSystemInfo] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Lazy Loading States (Progressive Infinite Scroll without pagination pages)
+  const INITIAL_BATCH = 24;
+  const BATCH_INCREMENT = 18;
+  const [visibleCount, setVisibleCount] = useState(INITIAL_BATCH);
+  const sentinelRef = useRef(null);
+
   // Filter States
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Alle');
@@ -57,6 +63,17 @@ export default function App() {
   const [activeEditModel, setActiveEditModel] = useState(null);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+
+  // Background Upload State
+  const [backgroundUpload, setBackgroundUpload] = useState({
+    active: false,
+    progress: 0,
+    current: 0,
+    total: 0,
+    currentTitle: '',
+    successCount: 0,
+    statusText: ''
+  });
 
   // Drag over window state
   const [isWindowDragOver, setIsWindowDragOver] = useState(false);
@@ -125,6 +142,148 @@ export default function App() {
     }, 200);
     return () => clearTimeout(timeout);
   }, [fetchModels]);
+
+  // Reset lazy load counter when filters or sort change
+  useEffect(() => {
+    setVisibleCount(INITIAL_BATCH);
+  }, [searchQuery, selectedCategory, selectedTag, onlyFavorites, sortBy]);
+
+  // Sliced models for progressive lazy loading
+  const visibleModels = useMemo(() => {
+    return models.slice(0, visibleCount);
+  }, [models, visibleCount]);
+
+  // IntersectionObserver for progressive infinite scroll
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) {
+        setVisibleCount((prev) => {
+          if (prev < models.length) {
+            return Math.min(prev + BATCH_INCREMENT, models.length);
+          }
+          return prev;
+        });
+      }
+    }, { rootMargin: '350px' });
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [models.length, visibleCount]);
+
+  // Concurrent Background Folder Upload Runner (4 parallel workers)
+  const startFolderUpload = useCallback(async ({ items, isPreserve, folderName }) => {
+    if (!items || items.length === 0) return;
+    const total = items.length;
+    let completed = 0;
+    let successful = 0;
+    let lastRefreshTime = Date.now();
+
+    setBackgroundUpload({
+      active: true,
+      progress: 1,
+      current: 0,
+      total,
+      currentTitle: items[0]?.name || '',
+      successCount: 0,
+      statusText: `Starte parallelen Upload (${total} Einträge)...`
+    });
+
+    const CONCURRENCY = 4;
+    let nextIndex = 0;
+
+    const worker = async () => {
+      while (nextIndex < total) {
+        const i = nextIndex++;
+        const item = items[i];
+        const formattedTitle = (item.name || 'Modell').replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+        setBackgroundUpload(prev => ({
+          ...prev,
+          current: completed + 1,
+          currentTitle: formattedTitle,
+          statusText: `(${completed + 1}/${total}) ${formattedTitle}...`
+        }));
+
+        const formData = new FormData();
+        formData.append('title', formattedTitle);
+        formData.append('author', 'Michael Schellenberger');
+        formData.append('filament_color', '#38bdf8');
+        formData.append('filament_type', 'PLA');
+
+        if (isPreserve) {
+          formData.append('category', item.isSubfolder ? 'Baugruppen' : 'Deko & Haushalt');
+          formData.append('description', item.isSubfolder 
+            ? `Baugruppe aus Ordner "${item.name}" (${item.files.length} Teile)` 
+            : `Einzelmodell aus "${folderName}"`);
+          for (const file of item.files) {
+            formData.append('files', file);
+          }
+        } else {
+          formData.append('category', 'Deko & Haushalt');
+          formData.append('files', item.file);
+        }
+
+        try {
+          const res = await fetch('/api/models', {
+            method: 'POST',
+            body: formData
+          });
+          if (res.ok) {
+            successful++;
+          }
+        } catch (err) {
+          console.error('Upload error for', formattedTitle, err);
+        }
+
+        completed++;
+        const pct = Math.round((completed / total) * 100);
+
+        setBackgroundUpload(prev => ({
+          ...prev,
+          progress: pct,
+          current: completed,
+          successCount: successful
+        }));
+
+        // Dynamically refresh models while growing (every 2.5s or on finish)
+        if (Date.now() - lastRefreshTime > 2500 || completed === total) {
+          lastRefreshTime = Date.now();
+          fetchModels();
+          fetchMetadata();
+          fetchSystemInfo();
+        }
+      }
+    };
+
+    const workers = [];
+    for (let w = 0; w < Math.min(CONCURRENCY, total); w++) {
+      workers.push(worker());
+    }
+    await Promise.all(workers);
+
+    // Final refresh
+    fetchModels();
+    fetchMetadata();
+    fetchSystemInfo();
+    confetti({ particleCount: 70, spread: 80 });
+
+    setBackgroundUpload(prev => ({
+      ...prev,
+      active: false,
+      progress: 100,
+      statusText: `✅ ${successful} Modelle erfolgreich importiert!`
+    }));
+
+    setTimeout(() => {
+      setBackgroundUpload(prev => {
+        if (!prev.active) return { ...prev, progress: 0, statusText: '' };
+        return prev;
+      });
+    }, 6000);
+  }, [fetchModels, fetchMetadata, fetchSystemInfo]);
 
   // Global Keyboard Shortcuts (Escape closes modals)
   useEffect(() => {
@@ -273,7 +432,7 @@ export default function App() {
 
   return (
     <div 
-      className="min-h-screen bg-slate-950 text-slate-100 flex flex-col bg-grid-pattern selection:bg-cyan-500 selection:text-slate-950 pb-20"
+      className="min-h-screen bg-slate-950/20 text-slate-100 flex flex-col bg-grid-pattern selection:bg-cyan-500 selection:text-slate-950 pb-20"
       onDragEnter={handleDragEnter}
       onDragOver={(e) => e.preventDefault()}
       onDragLeave={handleDragLeave}
@@ -307,68 +466,71 @@ export default function App() {
         setDarkMode={setDarkMode}
         sortBy={sortBy}
         setSortBy={setSortBy}
+        backgroundUpload={backgroundUpload}
       />
 
-      {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6 sm:space-y-8">
+      {/* Main Container - 92% Width for Modern Widescreen */}
+      <main className="flex-1 w-[92%] max-w-[2400px] mx-auto px-2 sm:px-4 lg:px-6 py-6 sm:py-8 space-y-6 sm:space-y-8">
         
         {/* Hero Banner with Quick Stats */}
-        <div className="relative rounded-3xl p-5 sm:p-8 bg-gradient-to-r from-slate-900/90 via-slate-900/60 to-cyan-950/40 border border-slate-800/80 shadow-2xl overflow-hidden flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+        <div className="relative rounded-3xl p-6 sm:p-8 bg-gradient-to-r from-slate-900/95 via-slate-850/90 to-cyan-950/40 border border-slate-700/80 shadow-2xl backdrop-blur-xl overflow-hidden flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div className="space-y-2 z-10 max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-semibold">
-              <Sparkles className="w-3.5 h-3.5" />
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 text-xs font-semibold shadow-sm">
+              <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
               <span>3D Printing Storage Vault</span>
             </div>
-            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
+            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white drop-shadow-sm">
               Dein persönlicher 3D-Modell Katalog
             </h2>
-            <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
-              Verwalte, visualisiere und öffne deine STL- & 3MF-Dateien direkt im Slicer (Bambu Studio, OrcaSlicer, PrusaSlicer).
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-xl">
+              Verwalte, visualisiere und öffne deine STL- & 3MF-Dateien direkt im Slicer (Bambu Studio, OrcaSlicer, Anycubic Slicer, PrusaSlicer).
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 z-10 w-full md:w-auto">
-            <div className="flex-1 sm:flex-initial p-3.5 sm:p-4 rounded-2xl bg-slate-950/60 border border-slate-800 backdrop-blur-md text-center min-w-[95px]">
-              <div className="text-xl sm:text-2xl font-black text-cyan-400 font-mono">{systemInfo?.stats?.total_projects || models.length}</div>
-              <div className="text-[10px] sm:text-[11px] font-medium text-slate-400 uppercase tracking-wider">Modelle</div>
+            <div className="flex-1 sm:flex-initial p-3.5 sm:p-4 rounded-2xl bg-slate-800/80 border border-slate-700/80 backdrop-blur-md text-center min-w-[105px] shadow-lg hover:border-cyan-500/40 transition">
+              <div className="text-2xl sm:text-3xl font-black text-cyan-400 font-mono tracking-tight">{systemInfo?.stats?.total_projects || models.length}</div>
+              <div className="text-[10px] sm:text-[11px] font-semibold text-slate-300 uppercase tracking-wider mt-0.5">Modelle</div>
             </div>
-            <div className="flex-1 sm:flex-initial p-3.5 sm:p-4 rounded-2xl bg-slate-950/60 border border-slate-800 backdrop-blur-md text-center min-w-[95px]">
-              <div className="text-xl sm:text-2xl font-black text-slate-100 font-mono">{categories.length}</div>
-              <div className="text-[10px] sm:text-[11px] font-medium text-slate-400 uppercase tracking-wider">Kategorien</div>
+            <div className="flex-1 sm:flex-initial p-3.5 sm:p-4 rounded-2xl bg-slate-800/80 border border-slate-700/80 backdrop-blur-md text-center min-w-[105px] shadow-lg hover:border-cyan-500/40 transition">
+              <div className="text-2xl sm:text-3xl font-black text-white font-mono tracking-tight">{categories.length}</div>
+              <div className="text-[10px] sm:text-[11px] font-semibold text-slate-300 uppercase tracking-wider mt-0.5">Kategorien</div>
             </div>
-            <div className="flex-1 sm:flex-initial p-3.5 sm:p-4 rounded-2xl bg-slate-950/60 border border-slate-800 backdrop-blur-md text-center min-w-[95px]">
-              <div className="text-xl sm:text-2xl font-black text-slate-200 font-mono">{systemInfo?.stats?.storage_formatted || '0 MB'}</div>
-              <div className="text-[10px] sm:text-[11px] font-medium text-slate-400 uppercase tracking-wider">Speicher</div>
+            <div className="flex-1 sm:flex-initial p-3.5 sm:p-4 rounded-2xl bg-slate-800/80 border border-slate-700/80 backdrop-blur-md text-center min-w-[105px] shadow-lg hover:border-cyan-500/40 transition">
+              <div className="text-2xl sm:text-3xl font-black text-emerald-400 font-mono tracking-tight">{systemInfo?.stats?.storage_formatted || '0 MB'}</div>
+              <div className="text-[10px] sm:text-[11px] font-semibold text-slate-300 uppercase tracking-wider mt-0.5">Speicher</div>
             </div>
           </div>
 
-          <div className="absolute -right-20 -top-20 w-80 h-80 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+          {/* Decorative ambient light orbs */}
+          <div className="absolute -right-16 -top-16 w-80 h-80 bg-cyan-500/15 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -left-16 -bottom-16 w-80 h-80 bg-indigo-500/15 rounded-full blur-3xl pointer-events-none" />
         </div>
 
         {/* Toolbar Bar: Tags & Selection Mode Toggle */}
         <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
           {/* Tags */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar flex-1">
-            <span className="text-slate-500 font-medium whitespace-nowrap">Tags:</span>
+            <span className="text-slate-400 font-medium whitespace-nowrap">Tags:</span>
             {selectedTag && (
               <button
                 onClick={() => setSelectedTag('')}
-                className="px-2.5 py-1 rounded-lg bg-slate-800 text-cyan-400 border border-slate-700 font-semibold"
+                className="px-2.5 py-1 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-semibold shadow-sm"
               >
                 ✕ #{selectedTag}
               </button>
             )}
-            {tags.slice(0, 8).map((t) => (
+            {tags.slice(0, 10).map((t) => (
               <button
                 key={t.id}
                 onClick={() => setSelectedTag(selectedTag === t.name ? '' : t.name)}
-                className={`px-2.5 py-1 rounded-lg transition whitespace-nowrap ${
+                className={`px-2.5 py-1 rounded-lg transition whitespace-nowrap font-medium ${
                   selectedTag === t.name
-                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
-                    : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                    ? 'bg-cyan-500/25 text-cyan-300 border border-cyan-500/50 shadow-sm'
+                    : 'bg-slate-800/70 text-slate-300 border border-slate-700/70 hover:text-white hover:bg-slate-750 hover:border-slate-600'
                 }`}
               >
-                #{t.name} <span className="text-[10px] text-slate-500">({t.count})</span>
+                #{t.name} <span className="text-[10px] text-slate-400 font-mono">({t.count})</span>
               </button>
             ))}
           </div>
@@ -380,10 +542,10 @@ export default function App() {
                 setSelectionMode(!selectionMode);
                 if (selectionMode) setSelectedIds([]);
               }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition ${
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border text-xs font-semibold transition ${
                 selectionMode 
-                  ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-lg shadow-cyan-500/20' 
-                  : 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white hover:border-slate-700'
+                  ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-lg shadow-cyan-500/20 font-bold' 
+                  : 'bg-slate-800/80 border-slate-700 text-slate-200 hover:text-white hover:bg-slate-700 hover:border-slate-600 shadow-sm'
               }`}
             >
               <CheckSquare className="w-3.5 h-3.5" />
@@ -392,32 +554,58 @@ export default function App() {
           )}
         </div>
 
-        {/* Model Catalog Grid */}
+        {/* Model Catalog Grid - Responsive Wide Grid */}
         {loading ? (
           <div className="py-24 flex flex-col items-center justify-center text-slate-400 space-y-4">
             <div className="w-12 h-12 border-4 border-cyan-500/20 border-t-cyan-500 rounded-full animate-spin" />
             <p className="text-sm font-medium">Modelle werden geladen...</p>
           </div>
         ) : models.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
-            {models.map((model) => (
-              <ModelCard
-                key={model.id}
-                model={model}
-                selectionMode={selectionMode}
-                isSelected={selectedIds.includes(model.id)}
-                onToggleSelect={handleToggleSelect}
-                onOpenViewer={(m) => setActiveViewerModel(m)}
-                onOpenSlicer={(m, f) => {
-                  setActiveSlicerModel(m);
-                  setActiveSlicerFile(f);
-                }}
-                onToggleFavorite={handleToggleFavorite}
-                onDelete={handleDeleteModel}
-                onEdit={(m) => setActiveEditModel(m)}
-              />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-6">
+              {visibleModels.map((model) => (
+                <ModelCard
+                  key={model.id}
+                  model={model}
+                  selectionMode={selectionMode}
+                  isSelected={selectedIds.includes(model.id)}
+                  onToggleSelect={handleToggleSelect}
+                  onOpenViewer={(m) => setActiveViewerModel(m)}
+                  onOpenSlicer={(m, f) => {
+                    setActiveSlicerModel(m);
+                    setActiveSlicerFile(f);
+                  }}
+                  onToggleFavorite={handleToggleFavorite}
+                  onDelete={handleDeleteModel}
+                  onEdit={(m) => setActiveEditModel(m)}
+                />
+              ))}
+            </div>
+
+            {/* Lazy Load Sentinel & Smooth Infinite Scroll Status */}
+            <div className="pt-8 pb-4 flex flex-col items-center justify-center">
+              {visibleModels.length < models.length ? (
+                <div ref={sentinelRef} className="flex flex-col items-center gap-2 py-4">
+                  <div className="flex items-center gap-2.5 text-xs font-semibold text-slate-200 bg-slate-900/90 px-4 py-2 rounded-full border border-slate-700/80 shadow-lg">
+                    <div className="w-3.5 h-3.5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin shrink-0" />
+                    <span>Lade weitere Modelle ({visibleModels.length} von {models.length} sichtbar)...</span>
+                  </div>
+                  <button
+                    onClick={() => setVisibleCount(prev => Math.min(prev + BATCH_INCREMENT, models.length))}
+                    className="text-xs text-cyan-400 hover:text-cyan-300 hover:underline font-mono mt-1"
+                  >
+                    + Mehr Modelle laden
+                  </button>
+                </div>
+              ) : models.length > INITIAL_BATCH ? (
+                <div className="text-center py-4">
+                  <span className="text-xs font-mono text-slate-400 bg-slate-900/70 px-4 py-1.5 rounded-full border border-slate-800">
+                    ✓ Alle {models.length} Modelle geladen
+                  </span>
+                </div>
+              ) : null}
+            </div>
+          </>
         ) : (
           /* Empty State */
           <div className="py-20 px-6 rounded-3xl bg-slate-900/40 border border-slate-800 text-center flex flex-col items-center justify-center space-y-4 max-w-lg mx-auto">
@@ -586,6 +774,8 @@ export default function App() {
             fetchSystemInfo();
           }}
           systemInfo={systemInfo}
+          backgroundUpload={backgroundUpload}
+          onStartBackgroundUpload={startFolderUpload}
         />
       )}
 

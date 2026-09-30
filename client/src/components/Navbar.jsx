@@ -26,11 +26,12 @@ export default function Navbar({
   darkMode,
   setDarkMode,
   sortBy,
-  setSortBy
+  setSortBy,
+  backgroundUpload
 }) {
   return (
-    <header className="sticky top-0 z-40 w-full backdrop-blur-xl bg-slate-900/80 border-b border-slate-800 transition-colors">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <header className="sticky top-0 z-40 w-full backdrop-blur-2xl bg-slate-900/90 border-b border-slate-700/70 shadow-lg shadow-black/20 transition-colors">
+      <div className="w-[92%] max-w-[2000px] mx-auto px-2 sm:px-4">
         <div className="flex items-center justify-between h-20 gap-4">
           
           {/* Brand Logo & Title */}
@@ -92,6 +93,30 @@ export default function Navbar({
               <span className="text-sm">🍎</span>
               <span>Mac App: <strong className="text-cyan-400 group-hover:underline">AIPrintStudio</strong></span>
             </a>
+
+            {/* Live Upload Progress Indicator in Header */}
+            {backgroundUpload?.active ? (
+              <button
+                onClick={onOpenScanner}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gradient-to-r from-cyan-950/90 to-slate-900 border border-cyan-500/50 text-cyan-200 text-xs font-semibold shadow-lg shadow-cyan-500/10 hover:border-cyan-400 transition animate-in fade-in"
+                title="Klicke, um den Import-Dialog zu öffnen"
+              >
+                <div className="w-3.5 h-3.5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin shrink-0" />
+                <span className="font-mono text-cyan-300 font-bold">
+                  {backgroundUpload.current}/{backgroundUpload.total}
+                </span>
+                <span className="text-cyan-400 font-mono text-[11px]">
+                  ({backgroundUpload.progress}%)
+                </span>
+                <span className="hidden xl:inline text-slate-300 truncate max-w-[120px]">
+                  {backgroundUpload.currentTitle}
+                </span>
+              </button>
+            ) : backgroundUpload?.statusText ? (
+              <div className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-xs font-semibold shadow animate-in fade-in">
+                <span>{backgroundUpload.statusText}</span>
+              </div>
+            ) : null}
 
             {/* Folder Scanner Trigger */}
             <button
@@ -179,6 +204,16 @@ export default function Navbar({
         </div>
 
       </div>
+
+      {/* Glowing Bottom Progress Bar when Uploading */}
+      {backgroundUpload?.active && (
+        <div className="absolute bottom-0 left-0 right-0 h-1 bg-slate-950 overflow-hidden">
+          <div 
+            className="h-full bg-gradient-to-r from-cyan-500 via-sky-400 to-emerald-400 transition-all duration-300 shadow-[0_0_12px_rgba(6,182,212,0.9)]"
+            style={{ width: `${backgroundUpload.progress}%` }}
+          />
+        </div>
+      )}
     </header>
   );
 }

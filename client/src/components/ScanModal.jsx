@@ -7,7 +7,6 @@ import {
   AlertCircle, 
   Sparkles,
   ArrowRight,
-  FolderOpen,
   FolderSearch,
   ExternalLink,
   UploadCloud,
@@ -19,12 +18,16 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
-export default function ScanModal({ onClose, onScanComplete, systemInfo }) {
+export default function ScanModal({ 
+  onClose, 
+  onScanComplete, 
+  systemInfo,
+  backgroundUpload,
+  onStartBackgroundUpload 
+}) {
   const defaultWatchDir = systemInfo?.watch_dir || '/Users/michael/Programmerierung/STL-Storage/data/watch_import';
   const [customPath, setCustomPath] = useState(defaultWatchDir);
   const [scanning, setScanning] = useState(false);
-  const [openingFolder, setOpeningFolder] = useState(false);
-  const [folderOpenFeedback, setFolderOpenFeedback] = useState('');
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
 
@@ -34,32 +37,6 @@ export default function ScanModal({ onClose, onScanComplete, systemInfo }) {
   // Native folder selection via browser
   const folderInputRef = useRef(null);
   const [pickedFolderInfo, setPickedFolderInfo] = useState(null);
-  const [isUploadingPickedFolder, setIsUploadingPickedFolder] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-
-  // Open folder directly in OS Finder / Explorer
-  const handleOpenInFinder = async (targetPath = customPath) => {
-    setOpeningFolder(true);
-    setFolderOpenFeedback('');
-    try {
-      const res = await fetch('/api/system/open-folder', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: targetPath || defaultWatchDir })
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setFolderOpenFeedback('✅ Ordner im Finder / Dateimanager geöffnet!');
-        setTimeout(() => setFolderOpenFeedback(''), 4000);
-      } else {
-        setError(data.error || 'Konnte Ordner nicht öffnen');
-      }
-    } catch (err) {
-      setError('Verbindungsfehler beim Öffnen des Ordners');
-    } finally {
-      setOpeningFolder(false);
-    }
-  };
 
   // Trigger scanning server path
   const handleScan = async (e) => {
@@ -149,107 +126,26 @@ export default function ScanModal({ onClose, onScanComplete, systemInfo }) {
     });
   };
 
-  // Upload the files selected through native directory picker
-  const [uploadStatusText, setUploadStatusText] = useState('');
-
-  const handleUploadPickedFolder = async () => {
+  // Upload selected files via background runner
+  const handleUploadPickedFolder = () => {
     if (!pickedFolderInfo || pickedFolderInfo.stlFiles.length === 0) return;
-
-    setIsUploadingPickedFolder(true);
-    setError(null);
-    setUploadProgress(1);
-
-    try {
-      if (structureMode === 'preserve') {
-        // PRESERVE STRUCTURE: Upload each subfolder group as a multi-part project and root files as individual projects
-        const groupsToUpload = pickedFolderInfo.groupList;
-        const total = groupsToUpload.length;
-        let successCount = 0;
-
-        for (let i = 0; i < total; i++) {
-          const grp = groupsToUpload[i];
-          const formattedTitle = grp.name.replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-          setUploadStatusText(`(${i + 1}/${total}) Speichere Projekt: "${formattedTitle}" (${grp.files.length} Dateien)...`);
-
-          const formData = new FormData();
-          formData.append('title', formattedTitle);
-          formData.append('category', grp.isSubfolder ? 'Baugruppen' : 'Deko & Haushalt');
-          formData.append('author', 'Michael Schellenberger');
-          formData.append('description', grp.isSubfolder 
-            ? `Baugruppe aus Ordner "${grp.name}" (${grp.files.length} Teile)` 
-            : `Einzelmodell aus "${pickedFolderInfo.name}"`);
-          formData.append('filament_color', '#38bdf8');
-          formData.append('filament_type', 'PLA');
-
-          for (const file of grp.files) {
-            formData.append('files', file);
-          }
-
-          try {
-            const res = await fetch('/api/models', {
-              method: 'POST',
-              body: formData
-            });
-            if (res.ok) successCount++;
-          } catch (itemErr) {
-            console.error('Failed to upload project:', formattedTitle, itemErr);
-          }
-
-          setUploadProgress(Math.round(((i + 1) / total) * 100));
-        }
-
-        confetti({ particleCount: 70, spread: 80 });
-        setResult({
-          message: `${successCount} Projekte (${pickedFolderInfo.stlFiles.length} Dateien) erfolgreich mit erhaltener Ordnerstruktur importiert!`,
-          added: successCount,
-          errors: []
-        });
-      } else {
-        // FLAT: Upload each STL as an individual project
-        const total = pickedFolderInfo.stlFiles.length;
-        let successCount = 0;
-
-        for (let i = 0; i < total; i++) {
-          const file = pickedFolderInfo.stlFiles[i];
-          const baseTitle = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-          setUploadStatusText(`(${i + 1}/${total}) Speichere: "${baseTitle}"...`);
-
-          const formData = new FormData();
-          formData.append('title', baseTitle);
-          formData.append('category', 'Deko & Haushalt');
-          formData.append('author', 'Michael Schellenberger');
-          formData.append('files', file);
-
-          try {
-            const res = await fetch('/api/models', {
-              method: 'POST',
-              body: formData
-            });
-            if (res.ok) successCount++;
-          } catch (itemErr) {
-            console.error('Failed to upload file:', file.name, itemErr);
-          }
-
-          setUploadProgress(Math.round(((i + 1) / total) * 100));
-        }
-
-        confetti({ particleCount: 70, spread: 80 });
-        setResult({
-          message: `${successCount} einzelne 3D-Modelle erfolgreich im Hauptkatalog angelegt!`,
-          added: successCount,
-          errors: []
-        });
-      }
-
-      setPickedFolderInfo(null);
-      setUploadStatusText('');
-      onScanComplete();
-    } catch (err) {
-      setError('Fehler beim Importieren des Ordners');
-    } finally {
-      setIsUploadingPickedFolder(false);
+    if (onStartBackgroundUpload) {
+      const items = structureMode === 'preserve' 
+        ? pickedFolderInfo.groupList 
+        : pickedFolderInfo.stlFiles.map(f => ({
+            name: f.name.replace(/\.[^/.]+$/, ""),
+            isSubfolder: false,
+            file: f
+          }));
+      
+      onStartBackgroundUpload({
+        items,
+        isPreserve: structureMode === 'preserve',
+        folderName: pickedFolderInfo.name
+      });
     }
   };
+
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
@@ -337,34 +233,14 @@ export default function ScanModal({ onClose, onScanComplete, systemInfo }) {
             </div>
           </div>
 
-          {/* OPTION 1: Open in Native OS Finder / Explorer */}
-          <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-cyan-950/40 via-slate-900 to-slate-950 border border-cyan-500/30 space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <FolderOpen className="w-4 h-4 text-cyan-400" />
-                  <span>Import-Ordner im Finder / Explorer öffnen</span>
-                </h3>
-                <p className="text-xs text-slate-300 mt-1 leading-relaxed">
-                  Öffnet den Überwachungs-Ordner auf deinem Mac/PC. Ziehe deine 3D-Dateien einfach hinein.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleOpenInFinder(customPath)}
-                disabled={openingFolder}
-                className="shrink-0 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs shadow-lg shadow-cyan-500/20 transition active:scale-95 disabled:opacity-50"
-              >
-                <FolderOpen className="w-4 h-4" />
-                <span>{openingFolder ? 'Öffne...' : 'Im Finder öffnen'}</span>
-              </button>
+          {/* Compact Format Info */}
+          <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-slate-950/40 border border-slate-800 text-[11px] text-slate-400">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-semibold text-slate-300 shrink-0">Scan-Formate:</span>
+              <span className="px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-300 font-mono font-medium">.stl</span>
+              <span className="px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-300 font-mono font-medium">.3mf (Bambu & Anycubic ACE Pro)</span>
+              <span className="text-slate-500 truncate hidden sm:inline">• Begleitdateien (PDF, G-Code) werden automatisch ignoriert</span>
             </div>
-
-            {folderOpenFeedback && (
-              <div className="text-xs font-semibold text-emerald-400 bg-emerald-950/60 border border-emerald-800/80 px-3 py-1.5 rounded-xl animate-in fade-in">
-                {folderOpenFeedback}
-              </div>
-            )}
           </div>
 
           {/* OPTION 2: Pick any Local Folder via Native OS File Picker */}
@@ -401,8 +277,43 @@ export default function ScanModal({ onClose, onScanComplete, systemInfo }) {
               </button>
             </div>
 
-            {/* If folder picked */}
-            {pickedFolderInfo && (
+            {/* Active Background Upload View */}
+            {backgroundUpload?.active ? (
+              <div className="p-4 rounded-xl bg-cyan-950/40 border border-cyan-800/60 space-y-3 text-xs animate-in fade-in">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <div className="font-semibold text-cyan-200 flex items-center gap-2 text-sm">
+                      <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin shrink-0" />
+                      <span>Upload läuft im Hintergrund ({backgroundUpload.progress}%)</span>
+                    </div>
+                    <p className="text-xs text-cyan-300/80 mt-1">
+                      <strong>{backgroundUpload.current} von {backgroundUpload.total}</strong> Modellen verarbeitet • {backgroundUpload.successCount} erfolgreich
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-0.5 truncate max-w-md">
+                      Aktuell: <span className="text-cyan-300 font-mono">{backgroundUpload.currentTitle}</span>
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs transition shadow-md shrink-0 flex items-center gap-1.5"
+                  >
+                    <span>Im Katalog beim Wachsen zusehen</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <div className="w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-cyan-900/60">
+                  <div 
+                    className="h-full bg-gradient-to-r from-cyan-500 via-sky-400 to-emerald-400 transition-all duration-300 shadow-[0_0_8px_rgba(6,182,212,0.8)]" 
+                    style={{ width: `${backgroundUpload.progress}%` }}
+                  />
+                </div>
+                <p className="text-[11px] text-slate-400 italic">
+                  💡 Du kannst dieses Fenster jederzeit schließen. Der Fortschritt läuft oben im Header weiter und neue Modelle erscheinen live im Katalog!
+                </p>
+              </div>
+            ) : pickedFolderInfo ? (
               <div className="p-4 rounded-xl bg-amber-950/40 border border-amber-800/60 space-y-3 text-xs animate-in fade-in">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
@@ -418,45 +329,25 @@ export default function ScanModal({ onClose, onScanComplete, systemInfo }) {
                         ? `📁 ${pickedFolderInfo.totalProjectsWhenPreserved} Projekte (Baugruppen erhalten)` 
                         : `📄 ${pickedFolderInfo.count} Einzelmodelle im Katalog`}
                     </p>
+                    {pickedFolderInfo.subfolderCount === 0 && (
+                      <p className="text-[11px] text-amber-300/90 bg-amber-900/40 border border-amber-700/50 rounded-lg p-2 mt-2 leading-relaxed">
+                        💡 <strong>Keine Unterordner erkannt?</strong> Falls deine Ordner in Nextcloud oder iCloud liegen (Wolkensymbol ☁️ mit Pfeil im Finder), liegen sie aktuell nur online. Klicke im Finder per Rechtsklick auf den Ordner und wähle <em>„Immer auf diesem Gerät behalten“</em> bzw. <em>„Herunterladen“</em>, damit der Browser sie einlesen kann.
+                      </p>
+                    )}
                   </div>
 
                   <button
                     type="button"
                     onClick={handleUploadPickedFolder}
-                    disabled={isUploadingPickedFolder || pickedFolderInfo.count === 0}
+                    disabled={pickedFolderInfo.count === 0}
                     className="flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition disabled:opacity-50 shadow-md shrink-0"
                   >
-                    {isUploadingPickedFolder ? (
-                      <>
-                        <div className="w-3.5 h-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
-                        <span>Importiere ({uploadProgress}%)...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Check className="w-3.5 h-3.5 stroke-[3]" />
-                        <span>{pickedFolderInfo.count} Dateien jetzt importieren</span>
-                      </>
-                    )}
+                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                    <span>{pickedFolderInfo.count} Dateien jetzt importieren</span>
                   </button>
                 </div>
-
-                {/* Live Progress bar during upload */}
-                {isUploadingPickedFolder && (
-                  <div className="space-y-1.5 pt-2 border-t border-amber-800/40">
-                    <div className="flex justify-between items-center text-[11px] text-amber-200">
-                      <span className="truncate max-w-md">{uploadStatusText || 'Lade Dateien hoch...'}</span>
-                      <span className="font-mono font-bold">{uploadProgress}%</span>
-                    </div>
-                    <div className="w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-amber-900/60">
-                      <div 
-                        className="h-full bg-gradient-to-r from-amber-500 via-yellow-400 to-emerald-400 transition-all duration-200" 
-                        style={{ width: `${uploadProgress}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
               </div>
-            )}
+            ) : null}
           </div>
 
           {/* OPTION 3: Server Path Input (Custom Path Scanner) */}

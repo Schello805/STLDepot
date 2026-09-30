@@ -45,6 +45,8 @@ export default function ThreeCanvas({
   const [showGrid, setShowGrid] = useState(false);
   const [showBBox, setShowBBox] = useState(false);
   const [stats, setStats] = useState(null);
+  const [hasMultiColor, setHasMultiColor] = useState(false);
+  const [detectedFilaments, setDetectedFilaments] = useState([]);
   const bedMeshRef = useRef(null);
 
   // Pro Tools: Clipping (Schnitt-Ebene) & Point-to-Point Measurement
@@ -211,10 +213,13 @@ export default function ThreeCanvas({
         centerAndAlignGeometry(geometry);
         const modelStats = analyzeGeometry(geometry);
         setStats(modelStats);
+        const isMulti = geometry.hasAttribute('color') || !!geometry.userData?.hasVertexColors;
+        setHasMultiColor(isMulti);
+        setDetectedFilaments(geometry.userData?.filamentColors || []);
         if (onGeometryLoaded) onGeometryLoaded(modelStats, geometry);
 
         // Material creation
-        const material = createMaterial(materialMode, color);
+        const material = createMaterial(materialMode, color, false, geometry);
         const mesh = new THREE.Mesh(geometry, material);
         mesh.castShadow = true;
         mesh.receiveShadow = true;
@@ -287,7 +292,7 @@ export default function ThreeCanvas({
       clipPlaneRef.current.constant = constant;
     }
 
-    meshRef.current.material = createMaterial(materialMode, color, clippingActive);
+    meshRef.current.material = createMaterial(materialMode, color, clippingActive, meshRef.current.geometry);
   }, [color, materialMode, clippingActive, clippingAxis, clippingValue]);
 
   // Update Grid / BBox visibility
@@ -297,19 +302,23 @@ export default function ThreeCanvas({
     if (bboxHelperRef.current) bboxHelperRef.current.visible = showBBox;
   }, [showGrid, showBBox]);
 
-  function createMaterial(mode, col, isClipping = false) {
+  function createMaterial(mode, col, isClipping = false, geom = null) {
     const planes = isClipping ? [clipPlaneRef.current] : [];
+    const targetGeom = geom || meshRef.current?.geometry;
+    const hasColors = targetGeom?.hasAttribute('color') || !!targetGeom?.userData?.hasVertexColors;
+
     let mat;
     switch (mode) {
       case 'wireframe':
-        mat = new THREE.MeshBasicMaterial({ color: col, wireframe: true });
+        mat = new THREE.MeshBasicMaterial({ color: hasColors ? 0xffffff : col, wireframe: true });
         break;
       case 'normal':
         mat = new THREE.MeshNormalMaterial({ side: THREE.DoubleSide });
         break;
       case 'metallic':
         mat = new THREE.MeshStandardMaterial({
-          color: col,
+          color: hasColors ? 0xffffff : col,
+          vertexColors: hasColors,
           metalness: 0.85,
           roughness: 0.2,
           side: THREE.DoubleSide
@@ -318,7 +327,8 @@ export default function ThreeCanvas({
       case 'standard':
       default:
         mat = new THREE.MeshStandardMaterial({
-          color: col,
+          color: hasColors ? 0xffffff : col,
+          vertexColors: hasColors,
           metalness: 0.15,
           roughness: 0.45,
           side: THREE.DoubleSide
@@ -740,18 +750,39 @@ export default function ThreeCanvas({
       {/* Bottom Floating Stats & Shading Selector */}
       {interactive && !loading && !error && (
         <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between pointer-events-none z-10">
-          {/* Filament Color Palette Quick Picker */}
-          <div className="flex items-center gap-1.5 p-1.5 rounded-xl bg-slate-900/80 backdrop-blur-md border border-slate-700/60 pointer-events-auto shadow-lg">
-            {filamentColors.map((c) => (
-              <button
-                key={c.hex}
-                onClick={() => setColor(c.hex)}
-                title={c.name}
-                className={`w-5 h-5 rounded-full transition-transform border ${color === c.hex ? 'scale-125 ring-2 ring-white border-white' : 'border-slate-600 hover:scale-110'}`}
-                style={{ backgroundColor: c.hex }}
-              />
-            ))}
-          </div>
+          {/* Filament Color Palette Quick Picker / 3MF Multi-Color Badge */}
+          {hasMultiColor ? (
+            <div className="flex items-center gap-2 p-1.5 px-3 rounded-xl bg-slate-900/90 backdrop-blur-md border border-cyan-500/40 pointer-events-auto shadow-lg text-xs font-semibold text-cyan-300">
+              <span className="flex items-center gap-1.5">
+                <Palette className="w-3.5 h-3.5 text-cyan-400" />
+                <span>3MF Mehrfarb-Vorschau</span>
+              </span>
+              {detectedFilaments.length > 0 && (
+                <div className="flex items-center gap-1 pl-1.5 border-l border-slate-700">
+                  {detectedFilaments.map((fCol, idx) => (
+                    <span
+                      key={idx}
+                      className="w-3.5 h-3.5 rounded-full border border-white/60 shadow-sm"
+                      style={{ backgroundColor: fCol }}
+                      title={`Filament ${idx + 1}: ${fCol}`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 p-1.5 rounded-xl bg-slate-900/80 backdrop-blur-md border border-slate-700/60 pointer-events-auto shadow-lg">
+              {filamentColors.map((c) => (
+                <button
+                  key={c.hex}
+                  onClick={() => setColor(c.hex)}
+                  title={c.name}
+                  className={`w-5 h-5 rounded-full transition-transform border ${color === c.hex ? 'scale-125 ring-2 ring-white border-white' : 'border-slate-600 hover:scale-110'}`}
+                  style={{ backgroundColor: c.hex }}
+                />
+              ))}
+            </div>
+          )}
 
           {/* Shading Mode */}
           <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-900/80 backdrop-blur-md border border-slate-700/60 pointer-events-auto shadow-lg">

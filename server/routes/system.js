@@ -8,27 +8,85 @@ const router = express.Router();
 
 function getGitRevision() {
   try {
-    const rev = execSync('git rev-parse --short HEAD', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-    return rev.trim();
+    const rev = execSync('git rev-parse --short HEAD', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    let count = '';
+    try {
+      count = execSync('git rev-list --count HEAD', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    } catch {}
+    return count ? `r${count}.${rev}` : `r.${rev}`;
   } catch (e) {
     return 'rev-' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-b1';
   }
 }
 
-// GET /api/system/info - Dynamic project metadata, revision, author info
-router.get('/info', (req, res) => {
+// GitHub Update Cache
+let updateCache = {
+  checkedAt: 0,
+  updateAvailable: false,
+  localRevision: null,
+  remoteRevision: null,
+  remoteCommitUrl: null,
+  commitMessage: ''
+};
+
+async function checkGitUpdate() {
+  const now = Date.now();
+  // Cache for 2 minutes to respect rate limits
+  if (now - updateCache.checkedAt < 120000 && updateCache.checkedAt > 0) {
+    return updateCache;
+  }
+
+  try {
+    let localSha = '';
+    try {
+      localSha = execSync('git rev-parse HEAD', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    } catch {}
+    const localShort = localSha ? localSha.slice(0, 7) : '';
+
+    const response = await fetch('https://api.github.com/repos/Schello805/STLDepot/commits/main', {
+      headers: { 'User-Agent': 'STL-Storage-Hub-Update-Checker' }
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const remoteSha = data.sha || '';
+      const remoteShort = remoteSha ? remoteSha.slice(0, 7) : '';
+      const isDifferent = Boolean(remoteSha && localSha && remoteSha !== localSha);
+
+      updateCache = {
+        checkedAt: now,
+        updateAvailable: isDifferent,
+        localRevision: localShort,
+        remoteRevision: remoteShort,
+        remoteCommitUrl: data.html_url || 'https://github.com/Schello805/STLDepot',
+        commitMessage: data.commit?.message?.split('\n')[0] || ''
+      };
+      return updateCache;
+    }
+  } catch (err) {
+    // Graceful fallback
+  }
+
+  updateCache.checkedAt = now;
+  return updateCache;
+}
+
+// GET /api/system/info - Dynamic project metadata, revision, author info & update status
+router.get('/info', async (req, res) => {
   try {
     const projectCount = db.prepare('SELECT COUNT(*) as count FROM projects').get().count;
     const fileCount = db.prepare('SELECT COUNT(*) as count FROM project_files').get().count;
     const totalSize = db.prepare('SELECT SUM(file_size) as size FROM project_files').get().size || 0;
 
     const revision = getGitRevision();
+    const updateInfo = await checkGitUpdate();
 
     res.json({
       success: true,
       app_name: 'STL-Storage Hub',
       version: '1.0.0',
       revision: revision,
+      update_info: updateInfo,
       author: 'Michael Schellenberger',
       license: 'CC BY-NC 4.0 (Creative Commons Non-Commercial)',
       github_repo: process.env.GITHUB_REPO_URL || 'https://github.com/Schello805/STLDepot',
@@ -41,6 +99,29 @@ router.get('/info', (req, res) => {
       watch_dir: WATCH_DIR,
       models_dir: MODELS_DIR
     });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/system/check-update - Force manual update check
+router.get('/check-update', async (req, res) => {
+  try {
+    updateCache.checkedAt = 0; // invalidate cache
+    const updateInfo = await checkGitUpdate();
+    res.json({ success: true, update_info: updateInfo, revision: getGitRevision() });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/system/pull-update - Pull latest changes from git origin
+router.post('/pull-update', (req, res) => {
+  try {
+    const output = execSync('git pull origin main', { encoding: 'utf8', timeout: 30000 });
+    updateCache.checkedAt = 0;
+    const newRev = getGitRevision();
+    res.json({ success: true, message: 'Update erfolgreich eingespielt!', output, revision: newRev });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

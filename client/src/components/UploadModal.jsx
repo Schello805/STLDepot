@@ -233,8 +233,10 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
           meshRef.current.material.dispose();
         }
 
+        const hasColors = geom.hasAttribute('color') || !!geom.userData?.hasVertexColors;
         const material = new THREE.MeshStandardMaterial({
-          color: new THREE.Color(filamentColor),
+          color: hasColors ? 0xffffff : new THREE.Color(filamentColor),
+          vertexColors: hasColors,
           metalness: 0.2,
           roughness: 0.45
         });

@@ -17,7 +17,7 @@ import {
   Check
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { parseSTL, parse3MF, generateThumbnailSnapshot } from '../utils/threeUtils';
+import { parseSTL, parse3MF, generateThumbnailSnapshot, extract3MFThumbnail } from '../utils/threeUtils';
 
 export default function ModelCard({ 
   model, 
@@ -73,14 +73,18 @@ export default function ModelCard({
         if (!response.ok) throw new Error('Could not fetch 3D file for thumbnail');
         const buffer = await response.arrayBuffer();
 
-        let geom;
+        let dataUrl = null;
         if (primaryModelFile.file_type === '3mf') {
-          geom = await parse3MF(buffer);
+          // Check for embedded slicer plate preview image first
+          dataUrl = await extract3MFThumbnail(buffer);
+          if (!dataUrl) {
+            const geom = await parse3MF(buffer);
+            dataUrl = await generateThumbnailSnapshot(geom, model.filament_color || '#38bdf8', 480, 360);
+          }
         } else {
-          geom = parseSTL(buffer);
+          const geom = parseSTL(buffer);
+          dataUrl = await generateThumbnailSnapshot(geom, model.filament_color || '#38bdf8', 480, 360);
         }
-
-        const dataUrl = await generateThumbnailSnapshot(geom, model.filament_color || '#38bdf8', 480, 360);
         if (dataUrl && isMounted) {
           setDynamicThumb(dataUrl);
           // Persist to server in background
@@ -131,39 +135,42 @@ export default function ModelCard({
 
   return (
     <div 
-      className={`group relative bg-slate-900/70 hover:bg-slate-900/90 border rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-xl hover:shadow-cyan-950/30 flex flex-col cursor-pointer transform hover:-translate-y-1 ${
+      className={`group relative bg-slate-900/90 hover:bg-slate-850/95 border rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-2xl hover:shadow-cyan-950/40 flex flex-col cursor-pointer transform hover:-translate-y-1 ${
         isSelected 
-          ? 'border-cyan-400 ring-2 ring-cyan-500/50 bg-slate-900' 
-          : 'border-slate-800 hover:border-cyan-500/40'
+          ? 'border-cyan-400 ring-2 ring-cyan-500/50 bg-slate-850' 
+          : 'border-slate-700/80 hover:border-cyan-400/70'
       }`}
       onClick={handleCardClick}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* Card Thumbnail / 3D Preview Banner */}
-      <div className="relative aspect-[4/3] w-full bg-slate-950 overflow-hidden flex items-center justify-center border-b border-slate-800/80">
+      {/* Card Thumbnail / 3D Preview Banner with Studio Pedestal Lighting */}
+      <div className="relative aspect-[4/3] w-full bg-gradient-to-b from-slate-800/95 via-slate-850 to-slate-900 overflow-hidden flex items-center justify-center border-b border-slate-700/80">
         
+        {/* Studio Pedestal Radial Light Spotlight */}
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(56,189,248,0.16),_transparent_70%)] pointer-events-none" />
+        <div className="absolute bottom-0 inset-x-0 h-8 bg-gradient-to-t from-slate-900/80 to-transparent pointer-events-none" />
+
         {dynamicThumb ? (
           <img 
             src={dynamicThumb} 
             alt={model.title}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 relative z-0"
             loading="lazy"
           />
         ) : loadingThumb ? (
-          <div className="flex flex-col items-center justify-center text-slate-500 gap-2">
-            <div className="w-8 h-8 border-2 border-cyan-500/20 border-t-cyan-500 rounded-full animate-spin" />
-            <span className="text-[10px] font-mono text-slate-400">Erzeuge 3D-Vorschau...</span>
+          <div className="flex flex-col items-center justify-center text-slate-400 gap-2 relative z-10">
+            <div className="w-8 h-8 border-2 border-cyan-500/30 border-t-cyan-400 rounded-full animate-spin" />
+            <span className="text-[10px] font-mono text-slate-300">Erzeuge 3D-Vorschau...</span>
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center text-slate-600 group-hover:text-cyan-400 transition-colors">
+          <div className="flex flex-col items-center justify-center text-slate-400 group-hover:text-cyan-400 transition-colors relative z-10">
             <div 
-              className="w-16 h-16 rounded-2xl flex items-center justify-center border border-slate-800 shadow-inner group-hover:scale-110 transition-transform"
-              style={{ backgroundColor: `${model.filament_color || '#38bdf8'}15` }}
+              className="w-16 h-16 rounded-2xl flex items-center justify-center border border-slate-700 shadow-inner group-hover:scale-110 transition-transform bg-slate-850"
             >
               <Box className="w-8 h-8" style={{ color: model.filament_color || '#38bdf8' }} />
             </div>
-            <span className="text-[11px] font-mono mt-2 text-slate-500">3D Vorschau öffnen</span>
+            <span className="text-[11px] font-mono mt-2 text-slate-300 font-medium">3D Vorschau öffnen</span>
           </div>
         )}
 
@@ -177,7 +184,7 @@ export default function ModelCard({
             className={`absolute top-3 right-3 w-6 h-6 rounded-lg border flex items-center justify-center transition-all z-20 ${
               isSelected 
                 ? 'bg-cyan-500 border-cyan-400 text-slate-950 shadow-md scale-110' 
-                : 'bg-slate-900/80 border-slate-600 text-transparent hover:border-cyan-400'
+                : 'bg-slate-900/90 border-slate-600 text-transparent hover:border-cyan-400'
             }`}
           >
             <Check className="w-4 h-4 stroke-[3]" />
@@ -190,23 +197,23 @@ export default function ModelCard({
             }}
             className={`absolute top-3 right-3 p-2 rounded-xl backdrop-blur-md border transition-all z-10 ${
               model.is_favorite 
-                ? 'bg-rose-500/20 border-rose-500/50 text-rose-400 scale-105' 
-                : 'bg-slate-900/60 border-slate-700/50 text-slate-400 hover:text-white hover:bg-slate-900'
+                ? 'bg-rose-500/25 border-rose-500/50 text-rose-300 scale-105 shadow-md' 
+                : 'bg-slate-900/80 border-slate-700/80 text-slate-300 hover:text-white hover:bg-slate-800'
             }`}
             title={model.is_favorite ? 'Aus Favoriten entfernen' : 'Zu Favoriten hinzufügen'}
           >
-            <Heart className={`w-4 h-4 ${model.is_favorite ? 'fill-rose-400' : ''}`} />
+            <Heart className={`w-4 h-4 ${model.is_favorite ? 'fill-rose-400 text-rose-400' : ''}`} />
           </button>
         )}
 
         {/* Top-Left Category & Multi-Part Badge */}
         <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 z-10">
-          <span className="px-2.5 py-1 text-[11px] font-medium rounded-lg bg-slate-900/80 backdrop-blur-md text-cyan-300 border border-slate-700/60">
+          <span className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-slate-900/90 backdrop-blur-md text-cyan-300 border border-slate-700/80 shadow-sm">
             {model.category || 'Allgemein'}
           </span>
           {stlCount > 1 && (
-            <span className="px-2 py-1 text-[11px] font-semibold rounded-lg bg-cyan-950/80 backdrop-blur-md text-cyan-400 border border-cyan-700/60 flex items-center gap-1">
-              <Layers className="w-3 h-3" />
+            <span className="px-2 py-1 text-[11px] font-bold rounded-lg bg-cyan-950/90 backdrop-blur-md text-cyan-300 border border-cyan-600/60 shadow-sm flex items-center gap-1">
+              <Layers className="w-3 h-3 text-cyan-400" />
               {stlCount} Teile
             </span>
           )}
@@ -214,13 +221,13 @@ export default function ModelCard({
 
         {/* Floating Quick Action Overlay on Hover (Hidden in selection mode) */}
         {!selectionMode && (
-          <div className={`absolute inset-0 bg-slate-950/60 backdrop-blur-[2px] flex items-center justify-center gap-3 transition-opacity duration-200 ${isHovered ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+          <div className={`absolute inset-0 bg-slate-950/50 backdrop-blur-[2px] flex items-center justify-center gap-2.5 transition-opacity duration-200 z-10 ${isHovered ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 onOpenViewer(model);
               }}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs shadow-lg transition"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs shadow-lg transition active:scale-95"
             >
               <Maximize2 className="w-3.5 h-3.5" />
               3D Viewer
@@ -230,7 +237,7 @@ export default function ModelCard({
                 e.stopPropagation();
                 onOpenSlicer(model);
               }}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-medium text-xs border border-slate-600 shadow-lg transition"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs border border-slate-600 shadow-lg transition active:scale-95"
             >
               <Printer className="w-3.5 h-3.5 text-cyan-400" />
               Slicer
@@ -240,36 +247,36 @@ export default function ModelCard({
       </div>
 
       {/* Card Content & Details */}
-      <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
+      <div className="p-4 flex-1 flex flex-col justify-between space-y-3 bg-slate-900/60">
         <div>
           {/* Title & Author */}
-          <h2 className="text-base font-semibold text-slate-100 group-hover:text-cyan-400 transition-colors line-clamp-1 tracking-tight" title={model.title}>
+          <h2 className="text-base font-bold text-white group-hover:text-cyan-300 transition-colors line-clamp-1 tracking-tight" title={model.title}>
             {model.title}
           </h2>
-          <p className="text-xs text-slate-400 line-clamp-1 mt-0.5">
+          <p className="text-xs text-slate-300 line-clamp-1 mt-0.5">
             {model.description || model.author || 'Keine Beschreibung vorhanden'}
           </p>
         </div>
 
         {/* Print Settings Badges */}
-        <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-300 font-mono">
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-[11px] text-slate-200 font-mono">
           {/* Filament Color & Type */}
-          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-950/70 border border-slate-800">
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-800/90 border border-slate-700 text-slate-200 shadow-sm">
             <span 
-              className="w-2.5 h-2.5 rounded-full ring-1 ring-slate-700" 
+              className="w-2.5 h-2.5 rounded-full ring-1 ring-slate-600 shadow-sm" 
               style={{ backgroundColor: model.filament_color || '#38bdf8' }}
             />
-            <span>{model.filament_type || 'PLA'}</span>
+            <span className="font-semibold text-slate-100">{model.filament_type || 'PLA'}</span>
           </div>
 
           {/* Infill % */}
-          <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-950/70 border border-slate-800 text-slate-400">
+          <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-800/90 border border-slate-700 text-slate-300 shadow-sm">
             <span>{model.infill_percentage}% Infill</span>
           </div>
 
           {/* Print Time */}
           {formatPrintTime(model.print_time_minutes) && (
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-950/70 border border-slate-800 text-cyan-400">
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-800/90 border border-slate-700 text-cyan-400 shadow-sm font-semibold">
               <Clock className="w-3 h-3" />
               <span>{formatPrintTime(model.print_time_minutes)}</span>
             </div>
@@ -280,12 +287,12 @@ export default function ModelCard({
         {model.tags && model.tags.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {model.tags.slice(0, 3).map((tag, idx) => (
-              <span key={idx} className="text-[10px] text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded-md">
+              <span key={idx} className="text-[10px] text-slate-300 bg-slate-800 px-2 py-0.5 rounded-md border border-slate-700/80 font-medium">
                 #{tag}
               </span>
             ))}
             {model.tags.length > 3 && (
-              <span className="text-[10px] text-slate-500 px-1 py-0.5">
+              <span className="text-[10px] text-slate-400 px-1 py-0.5 font-medium">
                 +{model.tags.length - 3}
               </span>
             )}
@@ -293,8 +300,8 @@ export default function ModelCard({
         )}
 
         {/* Card Footer Actions */}
-        <div className="pt-2 border-t border-slate-800/60 flex items-center justify-between text-xs text-slate-400">
-          <span className="text-[11px] font-mono">
+        <div className="pt-2 border-t border-slate-750/80 flex items-center justify-between text-xs text-slate-400">
+          <span className="text-[11px] font-mono font-medium text-slate-300">
             {formatFileSize(model.total_file_size)}
           </span>
 
@@ -304,7 +311,7 @@ export default function ModelCard({
                 e.stopPropagation();
                 onEdit(model);
               }}
-              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
+              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-750 transition shadow-sm"
               title="Bearbeiten"
             >
               <MoreVertical className="w-3.5 h-3.5" />
@@ -314,7 +321,7 @@ export default function ModelCard({
                 e.stopPropagation();
                 onDelete(model);
               }}
-              className="p-1.5 rounded-lg bg-slate-800 hover:bg-red-950 text-slate-400 hover:text-red-400 transition"
+              className="p-1.5 rounded-lg bg-slate-800 hover:bg-red-950 text-slate-400 hover:text-red-400 border border-slate-750 transition shadow-sm"
               title="Löschen"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -322,7 +329,7 @@ export default function ModelCard({
             <button
               onClick={handleDownload}
               disabled={downloading}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium transition active:scale-95 disabled:opacity-50"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-100 font-semibold border border-slate-750 hover:border-cyan-500/40 shadow-sm transition active:scale-95 disabled:opacity-50"
               title="Projekt als ZIP herunterladen"
             >
               <Download className={`w-3.5 h-3.5 text-cyan-400 ${downloading ? 'animate-bounce' : ''}`} />

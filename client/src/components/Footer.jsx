@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Heart, Code2, Sparkles, ShieldCheck, HardDrive } from 'lucide-react';
+import { Box, Heart, Code2, Sparkles, ShieldCheck, HardDrive, ArrowUpCircle, CheckCircle2 } from 'lucide-react';
 
 function GitHubIcon({ className = "w-4 h-4" }) {
   return (
@@ -16,10 +16,11 @@ export default function Footer({ systemInfo }) {
   const revision = systemInfo?.revision || 'rev-2026.09';
   const storageFormatted = systemInfo?.stats?.storage_formatted || '0 MB';
   const totalProjects = systemInfo?.stats?.total_projects || 0;
+  const updateInfo = systemInfo?.update_info;
 
   return (
-    <footer className="mt-20 border-t border-slate-800/80 bg-slate-950/70 backdrop-blur-md text-slate-400 py-10 transition-colors">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <footer className="mt-20 border-t border-slate-800/80 bg-slate-900/60 backdrop-blur-md text-slate-400 py-10 transition-colors">
+      <div className="w-[92%] max-w-[2400px] mx-auto px-2 sm:px-4 lg:px-6">
         <div className="flex flex-col md:flex-row items-center justify-between gap-6">
           
           {/* Project & Creator Info */}
@@ -42,12 +43,36 @@ export default function Footer({ systemInfo }) {
             </div>
           </div>
 
-          {/* Dynamic Revision / Version Badge */}
-          <div className="flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-slate-900/90 border border-slate-800 text-xs text-slate-300 font-mono shadow-sm">
-            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
-            <span>Version: <strong className="text-white">v{version}</strong></span>
-            <span className="text-slate-600">|</span>
-            <span className="text-cyan-400 font-semibold" title="Dynamische Revisionsnummer">Rev. {revision}</span>
+          {/* Dynamic Revision / Version & Update Badge */}
+          <div className="flex flex-col sm:flex-row items-center gap-2.5">
+            <div className="flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-slate-900/90 border border-slate-800 text-xs text-slate-300 font-mono shadow-sm">
+              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
+              <span>Version: <strong className="text-white">v{version}</strong></span>
+              <span className="text-slate-600">|</span>
+              <span className="text-cyan-400 font-semibold" title="Dynamische Git-Revisionsnummer">Rev. {revision}</span>
+            </div>
+
+            {/* Live Update Status Badge */}
+            {updateInfo?.updateAvailable ? (
+              <a
+                href={updateInfo.remoteCommitUrl || githubUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-amber-500/20 border border-amber-500/50 text-amber-300 hover:bg-amber-500/30 text-xs font-semibold shadow-lg shadow-amber-500/10 transition animate-pulse"
+                title={`Neuer Git-Commit verfügbar: ${updateInfo.remoteRevision} (${updateInfo.commitMessage})`}
+              >
+                <ArrowUpCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>Update verfügbar ({updateInfo.remoteRevision})</span>
+              </a>
+            ) : (
+              <div 
+                className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-slate-900/70 border border-slate-800/80 text-[11px] text-emerald-400 font-medium shadow-sm"
+                title="Dein STL-Storage Hub ist auf dem neuesten Stand"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span>Aktuell</span>
+              </div>
+            )}
           </div>
 
           {/* GitHub & Mac App Links */}
