@@ -266,7 +266,7 @@ router.get('/backup/json', (req, res) => {
 
     const tags = db.prepare('SELECT id, name FROM tags').all();
     const projects = db.prepare('SELECT * FROM projects').all();
-    const getFiles = db.prepare('SELECT id, filename, original_name, file_size, file_type, volume_cm3, triangle_count FROM project_files WHERE project_id = ?');
+    const getFiles = db.prepare('SELECT id, stored_name, original_name, file_size, file_type, volume_cm3, triangle_count FROM project_files WHERE project_id = ?');
     const getTags = db.prepare('SELECT t.name FROM tags t INNER JOIN project_tags pt ON t.id = pt.tag_id WHERE pt.project_id = ?');
 
     const enrichedProjects = projects.map(p => ({

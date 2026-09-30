@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import { db, MODELS_DIR, THUMBNAILS_DIR } from '../db.js';
+import { validatePublicUrl } from '../utils/urlSecurity.js';
 
 const router = express.Router();
 
@@ -70,6 +71,11 @@ router.post('/', async (req, res) => {
     }
 
     const trimmedUrl = url.trim();
+    const urlValidation = await validatePublicUrl(trimmedUrl);
+    if (!urlValidation.safe) {
+      return res.status(403).json({ success: false, error: urlValidation.error });
+    }
+
     const projectId = 'proj_' + crypto.randomBytes(8).toString('hex');
 
     // Case 1: Direct link to an .stl or .3mf file
@@ -163,16 +169,19 @@ router.post('/', async (req, res) => {
       trimmedUrl
     );
 
-    // If og:image was found, download and save as thumbnail
+    // If og:image was found, validate and download safely
     if (meta.image) {
       try {
-        const imgRes = await fetch(meta.image);
-        if (imgRes.ok) {
-          const imgBuffer = await imgRes.arrayBuffer();
-          const thumbName = `thumb_${projectId}.jpg`;
-          const thumbPath = path.join(THUMBNAILS_DIR, thumbName);
-          fs.writeFileSync(thumbPath, Buffer.from(imgBuffer));
-          db.prepare('UPDATE projects SET thumbnail_url = ? WHERE id = ?').run(`/api/thumbnails/${thumbName}`, projectId);
+        const imgCheck = await validatePublicUrl(meta.image);
+        if (imgCheck.safe) {
+          const imgRes = await fetch(meta.image);
+          if (imgRes.ok) {
+            const imgBuffer = await imgRes.arrayBuffer();
+            const thumbName = `thumb_${projectId}.jpg`;
+            const thumbPath = path.join(THUMBNAILS_DIR, thumbName);
+            fs.writeFileSync(thumbPath, Buffer.from(imgBuffer));
+            db.prepare('UPDATE projects SET thumbnail_url = ? WHERE id = ?').run(`/api/thumbnails/${thumbName}`, projectId);
+          }
         }
       } catch (e) {
         console.error('Thumbnail download failed:', e);
