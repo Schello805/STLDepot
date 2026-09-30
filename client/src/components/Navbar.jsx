@@ -90,11 +90,14 @@ export default function Navbar({
               href="https://github.com/Schello805/aiprintstudio"
               target="_blank"
               rel="noopener noreferrer"
-              title="Entdecke auch die AIPrintStudio macOS App von Michael Schellenberger"
-              className="hidden md:flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-slate-200 text-xs font-medium border border-slate-700/60 hover:border-cyan-500/50 transition shadow-sm group"
+              title="AIPrintStudio: Aus Bildern (Wappen, Logos) 3D-Druckdateien erstellen (auch mehrfarbig)!"
+              className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-slate-200 text-xs font-medium border border-slate-700/60 hover:border-cyan-500/50 transition shadow-sm group"
             >
-              <span className="text-sm">🍎</span>
-              <span>Mac App: <strong className="text-cyan-400 group-hover:underline">AIPrintStudio</strong></span>
+              <span className="text-base">🍎</span>
+              <div className="text-left">
+                <span className="block leading-tight">Mac App: <strong className="text-cyan-400 group-hover:underline">AIPrintStudio</strong></span>
+                <span className="block text-[10px] text-slate-400 font-normal">Bilder & Logos zu 3D-Druck (mehrfarbig)</span>
+              </div>
             </a>
 
             {/* Live Upload Progress Indicator in Header */}

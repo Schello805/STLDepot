@@ -217,16 +217,20 @@ export default function SlicerModal({ model, file, onClose }) {
             href="https://github.com/Schello805/aiprintstudio"
             target="_blank"
             rel="noopener noreferrer"
+            title="Aus Bildern (Wappen, Logos) druckfertige 3D-Dateien (auch mehrfarbig) erstellen!"
             className="flex items-center justify-between p-3.5 rounded-2xl bg-gradient-to-r from-slate-950 via-slate-900 to-cyan-950/30 border border-cyan-500/30 hover:border-cyan-400 transition group text-xs text-slate-300"
           >
             <div className="flex items-center gap-2.5">
               <span className="text-xl">🍎</span>
               <div>
-                <p className="font-semibold text-slate-100 group-hover:text-cyan-300 transition">
-                  AIPrintStudio für macOS
+                <p className="font-semibold text-slate-100 group-hover:text-cyan-300 transition flex items-center gap-1.5">
+                  <span>AIPrintStudio für macOS</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-mono">
+                    Bild zu 3D
+                  </span>
                 </p>
                 <p className="text-[11px] text-slate-400">
-                  Native 3D-Druck- & KI-Slicer-Begleiter App von Michael Schellenberger
+                  Erstelle aus 2D-Bildern (Wappen, Logos, Grafiken) direkt druckfertige 3D-Dateien – auch mehrfarbig!
                 </p>
               </div>
             </div>

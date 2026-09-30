@@ -81,10 +81,14 @@ export default function Footer({ systemInfo }) {
               href="https://github.com/Schello805/aiprintstudio"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-slate-900 to-slate-800 hover:from-slate-800 hover:to-slate-700 text-slate-100 text-xs font-semibold border border-cyan-500/30 hover:border-cyan-400 shadow-md transition group"
+              title="AIPrintStudio: Aus 2D-Bildern (Wappen, Logos) 3D-Druckdateien erstellen (auch mehrfarbig)!"
+              className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-slate-900 to-slate-800 hover:from-slate-800 hover:to-slate-700 text-slate-100 text-xs font-semibold border border-cyan-500/30 hover:border-cyan-400 shadow-md transition group"
             >
               <span className="text-base">🍎</span>
-              <span>Mac App: <strong className="text-cyan-400 group-hover:text-cyan-300">AIPrintStudio</strong></span>
+              <div className="text-left">
+                <span className="block leading-tight">Mac App: <strong className="text-cyan-400 group-hover:text-cyan-300">AIPrintStudio</strong></span>
+                <span className="block text-[10px] text-slate-400 font-normal">Bilder & Logos zu 3D-Druck (auch mehrfarbig)</span>
+              </div>
             </a>
 
             <a

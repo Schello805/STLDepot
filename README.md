@@ -23,7 +23,8 @@
 ## 🍎 Begleit-App für den Mac: AIPrintStudio
 
 > [!TIP]
-> **Für macOS-Nutzer:** Entdecke auch das Projekt **[AIPrintStudio](https://github.com/Schello805/aiprintstudio)** – die native KI-gestützte Begleit-App für 3D-Druck, Slicer-Steuerung und Filament-Management auf dem Mac von Michael Schellenberger!
+> **Für macOS-Nutzer:** Entdecke auch das Projekt **[AIPrintStudio](https://github.com/Schello805/aiprintstudio)** von Michael Schellenberger!  
+> **Das Kern-Feature:** Erstelle aus einfachen 2D-Bildern (wie Wappen, Firmenlogos, Icons, Schildern und Skizzen) vollautomatisch druckfertige 3D-Dateien – inklusive vollständiger **Mehrfarben-Unterstützung (Multi-Color)** für Bambu Lab, Anycubic Kobra 3 ACE Pro, Prusa MMU & Co.!
 
 ---
 
