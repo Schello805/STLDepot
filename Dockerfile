@@ -25,8 +25,11 @@ COPY server/ ./server/
 COPY assets/ ./assets/
 COPY --from=build-client /app/client/dist ./client/dist
 
-# Expose HTTP ports (80 for CapRover default, 3001 for standalone Docker)
-EXPOSE 80 3001
+# Pre-create data directories
+RUN mkdir -p /app/data /app/data/models /app/data/thumbnails /app/data/watch_import
+
+# Expose HTTP ports (80 for CapRover default, 3000, 3001 for standalone Docker)
+EXPOSE 80 3000 3001
 
 # Persistent volume for SQLite database, 3D files and watch import
 VOLUME ["/app/data"]
