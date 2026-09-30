@@ -195,9 +195,27 @@ if (fs.existsSync(clientDist)) {
   });
 }
 
-app.listen(PORT, () => {
+const primaryServer = app.listen(PORT, '0.0.0.0', () => {
   console.log(`===========================================`);
-  console.log(`🚀 STL-Storage Server läuft auf http://localhost:${PORT}`);
+  console.log(`🚀 STL-Storage Server läuft auf http://0.0.0.0:${PORT}`);
   console.log(`📦 Speichere 3D-Dateien in: ${MODELS_DIR}`);
   console.log(`===========================================`);
 });
+primaryServer.on('error', (err) => {
+  console.error(`Primary listener error on port ${PORT}:`, err.message);
+});
+
+// Dual-Port Binding: Also listen on secondary port (80 <-> 3001)
+// Ensures compatibility with CapRover default HTTP (80) AND direct container port mappings (3001)
+const SECONDARY_PORT = String(PORT) === '3001' ? 80 : 3001;
+try {
+  const secondaryServer = app.listen(SECONDARY_PORT, '0.0.0.0', () => {
+    console.log(`🚀 STL-Storage hört zusätzlich auf http://0.0.0.0:${SECONDARY_PORT}`);
+  });
+  secondaryServer.on('error', (err) => {
+    // Port might be in use or require root privileges, ignore gracefully
+    console.log(`[Port Info] Secondary port ${SECONDARY_PORT} not bound: ${err.message}`);
+  });
+} catch (err) {
+  // Graceful fallback
+}
