@@ -263,19 +263,26 @@ export default function ModelCard({
           </p>
         </div>
 
-        {/* Print Settings Badges */}
-        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-[11px] text-slate-200 font-mono">
-          {/* Filament Color & Type */}
-          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-800/90 border border-slate-700 text-slate-200 shadow-sm">
-            <span 
-              className="w-2.5 h-2.5 rounded-full ring-1 ring-slate-600 shadow-sm" 
-              style={{ backgroundColor: model.filament_color || '#38bdf8' }}
-            />
-            <span className="font-semibold text-slate-100">{model.filament_type || 'PLA'}</span>
-          </div>
+        {/* 3 Infos: Material, Gewicht, Preis (ohne Icons, kein Zeilenumbruch) */}
+        <div className="flex items-center gap-1.5 text-[11px] text-slate-200 font-mono flex-nowrap overflow-hidden">
+          {/* 1. Material */}
+          <span 
+            className="px-2 py-0.5 rounded-md bg-slate-800/90 border border-slate-700 text-slate-200 font-semibold shadow-sm shrink-0"
+            title={`Material: ${model.filament_type || 'PLA'}`}
+          >
+            {model.filament_type || 'PLA'}
+          </span>
 
-          {/* Print Cost & Weight (Replaces Infill) */}
-          <div 
+          {/* 2. Gewicht */}
+          <span 
+            className="px-2 py-0.5 rounded-md bg-slate-800/90 border border-slate-700 text-slate-300 font-medium shadow-sm shrink-0"
+            title={costInfo?.weight > 0 ? `Berechnetes Modellgewicht: ${costInfo.weightFormatted}` : 'Gewicht'}
+          >
+            {costInfo?.weightFormatted || '-- g'}
+          </span>
+
+          {/* 3. Preis */}
+          <span 
             onClick={(e) => {
               if (onOpenSettings) {
                 e.stopPropagation();
@@ -283,21 +290,19 @@ export default function ModelCard({
               }
             }}
             title={costInfo?.weight > 0 ? `Materialkosten: ${costInfo.price} (~${costInfo.weight}g ${costInfo.materialName} @ ${costInfo.pricePerKg} ${costInfo.currency}/kg). Klicke zum Anpassen der Preise.` : 'Druckkosten (Klicke für Einstellungen)'}
-            className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-950/70 border border-emerald-500/40 text-emerald-300 shadow-sm font-semibold hover:bg-emerald-900/80 hover:border-emerald-400 transition cursor-pointer"
+            className="px-2 py-0.5 rounded-md bg-emerald-950/70 border border-emerald-500/40 text-emerald-300 font-bold shadow-sm hover:bg-emerald-900/80 hover:border-emerald-400 transition cursor-pointer shrink-0"
           >
-            <Coins className="w-3 h-3 text-emerald-400 shrink-0" />
-            <span className="font-bold text-emerald-200">{costInfo?.price || '-- €'}</span>
-            {costInfo?.weight > 0 && (
-              <span className="text-[10px] text-emerald-400/80 font-normal">({costInfo.weightFormatted})</span>
-            )}
-          </div>
+            {costInfo?.price || '-- €'}
+          </span>
 
-          {/* Print Time */}
+          {/* Druckzeit (falls vorhanden) */}
           {formatPrintTime(model.print_time_minutes) && (
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-800/90 border border-slate-700 text-cyan-400 shadow-sm font-semibold">
-              <Clock className="w-3 h-3" />
-              <span>{formatPrintTime(model.print_time_minutes)}</span>
-            </div>
+            <span 
+              className="px-2 py-0.5 rounded-md bg-slate-800/90 border border-slate-700 text-cyan-400 font-semibold shadow-sm shrink-0"
+              title={`Druckzeit: ${formatPrintTime(model.print_time_minutes)}`}
+            >
+              {formatPrintTime(model.print_time_minutes)}
+            </span>
           )}
         </div>
 
