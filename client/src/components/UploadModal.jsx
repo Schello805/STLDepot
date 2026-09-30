@@ -204,7 +204,14 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
     return () => {
       window.removeEventListener('resize', handleResize);
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-      if (renderer) renderer.dispose();
+      if (renderer) {
+        renderer.dispose();
+        try {
+          renderer.forceContextLoss();
+          const gl = renderer.getContext();
+          gl?.getExtension('WEBGL_lose_context')?.loseContext();
+        } catch (e) {}
+      }
     };
   }, [files.length > 0]);
 

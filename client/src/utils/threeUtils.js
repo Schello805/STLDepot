@@ -438,75 +438,117 @@ export function centerAndAlignGeometry(geometry) {
   return geometry;
 }
 
+// Shared off-screen WebGL context & render queue to prevent "Too many active WebGL contexts"
+let sharedSnapshotRenderer = null;
+let sharedSnapshotCanvas = null;
+let snapshotQueue = Promise.resolve();
+
+function getSharedSnapshotRenderer(width, height) {
+  if (!sharedSnapshotCanvas) {
+    sharedSnapshotCanvas = document.createElement('canvas');
+  }
+  if (!sharedSnapshotRenderer) {
+    sharedSnapshotRenderer = new THREE.WebGLRenderer({
+      canvas: sharedSnapshotCanvas,
+      antialias: true,
+      alpha: true,
+      preserveDrawingBuffer: true,
+      powerPreference: 'low-power'
+    });
+    sharedSnapshotRenderer.setPixelRatio(1);
+
+    // Gracefully handle context loss and restore
+    sharedSnapshotCanvas.addEventListener('webglcontextlost', (e) => {
+      e.preventDefault();
+      console.warn('Snapshot WebGL context lost, will restore automatically...');
+    }, false);
+
+    sharedSnapshotCanvas.addEventListener('webglcontextrestored', () => {
+      console.info('Snapshot WebGL context restored successfully');
+    }, false);
+  }
+
+  if (sharedSnapshotCanvas.width !== width || sharedSnapshotCanvas.height !== height) {
+    sharedSnapshotCanvas.width = width;
+    sharedSnapshotCanvas.height = height;
+    sharedSnapshotRenderer.setSize(width, height, false);
+  }
+
+  return { renderer: sharedSnapshotRenderer, canvas: sharedSnapshotCanvas };
+}
+
 /**
  * Generate a snapshot thumbnail PNG as Data URL from a geometry
+ * Uses a single shared off-screen WebGL context with a mutex queue
+ * to strictly prevent the "Too many active WebGL contexts" browser limit.
  */
 export function generateThumbnailSnapshot(geometry, color = '#38bdf8', width = 400, height = 300) {
-  return new Promise((resolve) => {
-    try {
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
+  if (!geometry) return Promise.resolve(null);
 
-      const renderer = new THREE.WebGLRenderer({
-        canvas,
-        antialias: true,
-        alpha: true,
-        preserveDrawingBuffer: true
-      });
-      renderer.setSize(width, height);
-      renderer.setPixelRatio(1);
+  const task = snapshotQueue.then(() => {
+    return new Promise((resolve) => {
+      try {
+        const { renderer, canvas } = getSharedSnapshotRenderer(width, height);
 
-      const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
 
-      const geomClone = geometry.clone();
-      centerAndAlignGeometry(geomClone);
-      geomClone.computeBoundingBox();
-      const box = geomClone.boundingBox;
-      const size = new THREE.Vector3();
-      box.getSize(size);
-      const maxDim = Math.max(size.x, size.y, size.z) || 20;
+        const geomClone = geometry.clone();
+        centerAndAlignGeometry(geomClone);
+        geomClone.computeBoundingBox();
+        const box = geomClone.boundingBox;
+        const size = new THREE.Vector3();
+        box.getSize(size);
+        const maxDim = Math.max(size.x, size.y, size.z) || 20;
 
-      // Create model mesh (supports 3MF multi-color vertex colors)
-      const hasColors = geomClone.hasAttribute('color');
-      const material = new THREE.MeshStandardMaterial({
-        color: hasColors ? 0xffffff : new THREE.Color(color),
-        vertexColors: hasColors,
-        metalness: 0.2,
-        roughness: 0.4
-      });
-      const mesh = new THREE.Mesh(geomClone, material);
-      scene.add(mesh);
+        // Create model mesh (supports 3MF multi-color vertex colors)
+        const hasColors = geomClone.hasAttribute('color');
+        const material = new THREE.MeshStandardMaterial({
+          color: hasColors ? 0xffffff : new THREE.Color(color),
+          vertexColors: hasColors,
+          metalness: 0.2,
+          roughness: 0.4
+        });
+        const mesh = new THREE.Mesh(geomClone, material);
+        scene.add(mesh);
 
-      // Lights
-      const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
-      scene.add(ambientLight);
+        // Lights
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
+        scene.add(ambientLight);
 
-      const dirLight1 = new THREE.DirectionalLight(0xffffff, 1.4);
-      dirLight1.position.set(maxDim * 2, maxDim * 3, maxDim * 2.5);
-      scene.add(dirLight1);
+        const dirLight1 = new THREE.DirectionalLight(0xffffff, 1.4);
+        dirLight1.position.set(maxDim * 2, maxDim * 3, maxDim * 2.5);
+        scene.add(dirLight1);
 
-      const dirLight2 = new THREE.DirectionalLight(0x38bdf8, 0.6);
-      dirLight2.position.set(-maxDim * 2, maxDim * 1.5, -maxDim * 2);
-      scene.add(dirLight2);
+        const dirLight2 = new THREE.DirectionalLight(0x38bdf8, 0.6);
+        dirLight2.position.set(-maxDim * 2, maxDim * 1.5, -maxDim * 2);
+        scene.add(dirLight2);
 
-      // Camera position
-      const distance = maxDim * 2.2;
-      camera.position.set(distance * 0.9, distance * 0.8, distance * 1.1);
-      camera.lookAt(0, size.y / 2, 0);
+        // Camera position
+        const distance = maxDim * 2.2;
+        camera.position.set(distance * 0.9, distance * 0.8, distance * 1.1);
+        camera.lookAt(0, size.y / 2, 0);
 
-      renderer.render(scene, camera);
-      const dataUrl = canvas.toDataURL('image/png');
+        renderer.clear();
+        renderer.render(scene, camera);
+        const dataUrl = canvas.toDataURL('image/png');
 
-      renderer.dispose();
-      geomClone.dispose();
-      material.dispose();
+        // Cleanup only scene items, leaving shared renderer & canvas alive
+        scene.remove(mesh);
+        scene.remove(ambientLight);
+        scene.remove(dirLight1);
+        scene.remove(dirLight2);
+        geomClone.dispose();
+        material.dispose();
 
-      resolve(dataUrl);
-    } catch (e) {
-      console.error('Failed to generate thumbnail:', e);
-      resolve(null);
-    }
+        resolve(dataUrl);
+      } catch (e) {
+        console.error('Failed to generate thumbnail:', e);
+        resolve(null);
+      }
+    });
   });
+
+  snapshotQueue = task.catch(() => null);
+  return task;
 }

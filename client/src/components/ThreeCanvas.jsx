@@ -171,7 +171,14 @@ export default function ThreeCanvas({
     return () => {
       window.removeEventListener('resize', handleResize);
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-      if (renderer) renderer.dispose();
+      if (renderer) {
+        renderer.dispose();
+        try {
+          renderer.forceContextLoss();
+          const gl = renderer.getContext();
+          gl?.getExtension('WEBGL_lose_context')?.loseContext();
+        } catch (e) {}
+      }
     };
   }, []);
 
