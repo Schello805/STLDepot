@@ -123,8 +123,9 @@ router.get('/tags', (req, res) => {
     const tags = db.prepare(`
       SELECT t.id, t.name, COUNT(pt.project_id) as count
       FROM tags t
-      LEFT JOIN project_tags pt ON t.id = pt.tag_id
+      INNER JOIN project_tags pt ON t.id = pt.tag_id
       GROUP BY t.id
+      HAVING count > 0
       ORDER BY count DESC, t.name ASC
     `).all();
     res.json({ success: true, data: tags });
@@ -768,6 +769,7 @@ router.post('/batch-delete', (req, res) => {
     }
 
     const deleteFiles = db.prepare('SELECT file_path FROM project_files WHERE project_id = ?');
+    const getProject = db.prepare('SELECT thumbnail_url FROM projects WHERE id = ?');
     const deleteProject = db.prepare('DELETE FROM projects WHERE id = ?');
 
     const transaction = db.transaction((idList) => {
@@ -776,6 +778,14 @@ router.post('/batch-delete', (req, res) => {
         for (const file of files) {
           if (fs.existsSync(file.file_path)) {
             try { fs.unlinkSync(file.file_path); } catch (e) {}
+          }
+        }
+        const proj = getProject.get(id);
+        if (proj && proj.thumbnail_url && proj.thumbnail_url.includes('/api/thumbnails/')) {
+          const thumbFile = proj.thumbnail_url.split('/api/thumbnails/')[1].split('?')[0];
+          const thumbPath = path.join(THUMBNAILS_DIR, thumbFile);
+          if (fs.existsSync(thumbPath)) {
+            try { fs.unlinkSync(thumbPath); } catch (e) {}
           }
         }
         deleteProject.run(id);

@@ -21,6 +21,7 @@ const WATCH_DIR = path.join(DATA_DIR, 'watch_import');
 
 const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
+db.pragma('foreign_keys = ON');
 
 // Initialize database tables
 export function initDB() {
