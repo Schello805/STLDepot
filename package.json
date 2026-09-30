@@ -10,7 +10,8 @@
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "prebuild": "node scripts/update-revision.js",
     "build": "npm run build --prefix client",
-    "start": "npm run build && node server/index.js"
+    "start": "npm run build && node server/index.js",
+    "test": "node --test test/*.test.js"
   },
   "keywords": [
     "stl",
