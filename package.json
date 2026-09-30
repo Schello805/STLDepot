@@ -27,12 +27,12 @@
   "author": "Michael Schellenberger",
   "license": "CC-BY-NC-4.0",
   "dependencies": {
-    "archiver": "^7.0.1",
-    "better-sqlite3": "^11.8.1",
-    "chokidar": "^4.0.3",
-    "concurrently": "^9.1.2",
-    "cors": "^2.8.5",
-    "express": "^4.21.2",
-    "multer": "^1.4.5-lts.1"
+    "archiver": "^8.0.0",
+    "better-sqlite3": "^13.0.3",
+    "chokidar": "^5.0.0",
+    "concurrently": "^10.0.5",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "multer": "^2.4.0"
   }
 }
