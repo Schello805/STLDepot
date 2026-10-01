@@ -56,10 +56,16 @@ export default function App() {
   const [systemInfo, setSystemInfo] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Lazy Loading States (Progressive Infinite Scroll without pagination pages)
+  // Theme & View Mode (must be declared before any useEffect that references them)
+  const [theme, setTheme] = useState('dark');
+  const [viewMode, setViewMode] = useState('grid');
+
+  // Apply theme class to body
   useEffect(() => {
     document.body.className = 'theme-' + theme;
   }, [theme]);
+
+  // Lazy Loading States (Progressive Infinite Scroll without pagination pages)
   const INITIAL_BATCH = 24;
   const BATCH_INCREMENT = 18;
   const [visibleCount, setVisibleCount] = useState(INITIAL_BATCH);
@@ -73,8 +79,6 @@ export default function App() {
   const [selectedPrintTime, setSelectedPrintTime] = useState('Alle');
   const [onlyFavorites, setOnlyFavorites] = useState(false);
   const [sortBy, setSortBy] = useState('newest');
-  const [theme, setTheme] = useState('dark');
-  const [viewMode, setViewMode] = useState('grid');
   const [globalDragActive, setGlobalDragActive] = useState(false);
   const [droppedFiles, setDroppedFiles] = useState([]);
 
