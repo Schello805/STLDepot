@@ -3,26 +3,6 @@ import Navbar from './components/Navbar';
 import BottomNav from './components/BottomNav';
 import ModelCard from './components/ModelCard';
 import Footer from './components/Footer';
-import { formatTitleFromFilename } from './utils/formatUtils';
-
-// Helper to auto-reload if dynamic chunk loading fails due to app update
-const safeLazy = (importFn) => lazy(async () => {
-  try {
-    return await importFn();
-  } catch (error) {
-    console.warn('Chunk load error, reloading page to get fresh assets...', error);
-    window.location.reload();
-    return new Promise(() => {}); // prevent render while reloading
-  }
-});
-
-// Code-split heavy modals and 3D dependencies
-const ViewerModal = safeLazy(() => import('./components/ViewerModal'));
-const UploadModal = safeLazy(() => import('./components/UploadModal'));
-const EditModal = safeLazy(() => import('./components/EditModal'));
-const SlicerModal = safeLazy(() => import('./components/SlicerModal'));
-const ScanModal = safeLazy(() => import('./components/ScanModal'));
-const SettingsModal = safeLazy(() => import('./components/SettingsModal'));
 import { 
   Box, 
   Plus, 
@@ -46,6 +26,27 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useDialog } from './context/DialogContext';
+import { formatTitleFromFilename } from './utils/formatUtils';
+
+// Helper to auto-reload if dynamic chunk loading fails due to app update
+const safeLazy = (importFn) => lazy(async () => {
+  try {
+    return await importFn();
+  } catch (error) {
+    console.warn('Chunk load error, reloading page to get fresh assets...', error);
+    window.location.reload();
+    return new Promise(() => {}); // prevent render while reloading
+  }
+});
+
+// Code-split heavy modals and 3D dependencies
+const ViewerModal = safeLazy(() => import('./components/ViewerModal'));
+const UploadModal = safeLazy(() => import('./components/UploadModal'));
+const EditModal = safeLazy(() => import('./components/EditModal'));
+const SlicerModal = safeLazy(() => import('./components/SlicerModal'));
+const ScanModal = safeLazy(() => import('./components/ScanModal'));
+const SettingsModal = safeLazy(() => import('./components/SettingsModal'));
+
 
 export default function App() {
   const { confirm, alert } = useDialog();

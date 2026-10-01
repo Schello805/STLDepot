@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { parseSTL, parse3MF, centerAndAlignGeometry, analyzeGeometry } from '../utils/threeUtils';
 import { 
   RotateCw, 

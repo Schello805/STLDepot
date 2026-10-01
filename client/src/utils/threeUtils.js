@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GCodeLoader } from 'three/examples/jsm/loaders/GCodeLoader.js';
 import JSZip from 'jszip';
 
 /**
