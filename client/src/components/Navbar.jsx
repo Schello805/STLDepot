@@ -11,7 +11,10 @@ import {
   Moon,
   HardDrive,
   Coins,
-  Settings
+  Settings,
+  LayoutGrid,
+  List,
+  Monitor
 } from 'lucide-react';
 
 export default function Navbar({ 
@@ -26,8 +29,7 @@ export default function Navbar({
   onOpenScanner,
   onOpenSettings,
   systemInfo,
-  darkMode,
-  setDarkMode,
+  theme, setTheme, viewMode, setViewMode,
   sortBy,
   setSortBy,
   backgroundUpload,
@@ -89,6 +91,28 @@ export default function Navbar({
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2.5">
+            {/* View Toggle */}
+            <button
+              onClick={() => setViewMode(prev => prev === 'grid' ? 'list' : 'grid')}
+              className="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/60 transition-colors shadow-sm hidden sm:block"
+              title={viewMode === 'grid' ? "Zur Listenansicht" : "Zur Rasteransicht"}
+            >
+              {viewMode === 'grid' ? <List className="w-4 h-4" /> : <LayoutGrid className="w-4 h-4" />}
+            </button>
+            
+            {/* Theme Toggle */}
+            <button
+              onClick={() => {
+                if (theme === 'dark') setTheme('light');
+                else if (theme === 'light') setTheme('oled');
+                else setTheme('dark');
+              }}
+              className="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/60 transition-colors shadow-sm hidden sm:block"
+              title="Theme wechseln (Dark / Light / OLED)"
+            >
+              {theme === 'dark' ? <Moon className="w-4 h-4" /> : theme === 'light' ? <Sun className="w-4 h-4" /> : <Monitor className="w-4 h-4 text-cyan-400" />}
+            </button>
+            
             {/* AIPrintStudio Mac App Link */}
             <a
               href="https://github.com/Schello805/aiprintstudio"

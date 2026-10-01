@@ -31,6 +31,12 @@ export const BUILD_PLATE_PRESETS = [
   { id: 'standard', name: 'Standard (250×250)', x: 250, z: 250, height: 250 }
 ];
 
+// Setup DRACOLoader
+const dracoLoader = new DRACOLoader();
+dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/'); // Use public CDN or local static files
+const gltfLoader = new GLTFLoader();
+gltfLoader.setDRACOLoader(dracoLoader);
+
 export default function ThreeCanvas({ 
   fileUrl, 
   fileType = 'stl', 

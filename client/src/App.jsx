@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react';
 import Navbar from './components/Navbar';
+import BottomNav from './components/BottomNav';
 import ModelCard from './components/ModelCard';
 import Footer from './components/Footer';
 import { formatTitleFromFilename } from './utils/formatUtils';
@@ -55,6 +56,9 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   // Lazy Loading States (Progressive Infinite Scroll without pagination pages)
+  useEffect(() => {
+    document.body.className = 'theme-' + theme;
+  }, [theme]);
   const INITIAL_BATCH = 24;
   const BATCH_INCREMENT = 18;
   const [visibleCount, setVisibleCount] = useState(INITIAL_BATCH);
@@ -68,7 +72,10 @@ export default function App() {
   const [selectedPrintTime, setSelectedPrintTime] = useState('Alle');
   const [onlyFavorites, setOnlyFavorites] = useState(false);
   const [sortBy, setSortBy] = useState('newest');
-  const [darkMode, setDarkMode] = useState(true);
+  const [theme, setTheme] = useState('dark');
+  const [viewMode, setViewMode] = useState('grid');
+  const [globalDragActive, setGlobalDragActive] = useState(false);
+  const [droppedFiles, setDroppedFiles] = useState([]);
 
   // Batch Selection States
   const [selectionMode, setSelectionMode] = useState(false);
@@ -152,6 +159,43 @@ export default function App() {
       if (tagData.success) setTags(tagData.data);
     } catch (err) {
       console.error('Failed to fetch metadata:', err);
+    }
+  }, []);
+
+  // Global Drag & Drop
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer.types.includes('Files')) {
+      setGlobalDragActive(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.currentTarget.contains(e.relatedTarget)) return;
+    setGlobalDragActive(false);
+  }, []);
+
+  const handleDrop = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setGlobalDragActive(false);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const files = Array.from(e.dataTransfer.files);
+      const validFiles = files.filter(f => 
+        f.name.toLowerCase().endsWith('.stl') || 
+        f.name.toLowerCase().endsWith('.3mf') ||
+        f.name.toLowerCase().endsWith('.gcode') ||
+        f.name.toLowerCase().endsWith('.bgcode')
+      );
+      
+      if (validFiles.length > 0) {
+        setDroppedFiles(validFiles);
+        setIsUploadOpen(true);
+      }
     }
   }, []);
 
@@ -650,6 +694,14 @@ export default function App() {
       )}
 
       {/* Sticky Header Navbar */}
+      {/* Global Drag Overlay */}
+      {globalDragActive && (
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-sky-900/40 backdrop-blur-sm border-4 border-dashed border-sky-400 m-4 rounded-3xl pointer-events-none transition-all">
+          <UploadCloud className="w-24 h-24 text-sky-400 animate-bounce" />
+          <h2 className="text-3xl font-bold text-white mt-4 tracking-wide shadow-black drop-shadow-md">Dateien hier ablegen</h2>
+          <p className="text-sky-200 mt-2 font-medium">STL, 3MF, G-Code & .bgcode</p>
+        </div>
+      )}
       <Navbar
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
@@ -662,7 +714,7 @@ export default function App() {
         onOpenScanner={() => setIsScannerOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
         systemInfo={systemInfo}
-        darkMode={darkMode}
+        theme={theme} setTheme={setTheme} viewMode={viewMode} setViewMode={setViewMode}
         setDarkMode={setDarkMode}
         sortBy={sortBy}
         setSortBy={setSortBy}
@@ -770,6 +822,7 @@ export default function App() {
               {visibleModels.map((model) => (
                 <ModelCard
                   key={model.id}
+                viewMode={viewMode}
                   model={model}
                   selectionMode={selectionMode}
                   isSelected={selectedIds.includes(model.id)}
@@ -976,8 +1029,9 @@ export default function App() {
         )}
 
         {isUploadOpen && (
-          <UploadModal
-            onClose={() => setIsUploadOpen(false)}
+          <UploadModal 
+          onClose={() => { setIsUploadOpen(false); setDroppedFiles([]); }}
+          initialFiles={droppedFiles}
             onUploadSuccess={() => {
               fetchModels();
               fetchMetadata();
@@ -1013,6 +1067,12 @@ export default function App() {
       </Suspense>
 
       {/* Footer with Dynamic Rev & Open Source info */}
+      <BottomNav 
+        onHome={() => { setSearchQuery(''); setSelectedCategory('Alle'); setOnlyFavorites(false); window.scrollTo(0,0); }}
+        onUpload={() => setIsUploadOpen(true)}
+        onScan={() => setIsScannerOpen(true)}
+        onSettings={() => setIsSettingsOpen(true)}
+      />
       <Footer systemInfo={systemInfo} />
 
     </div>

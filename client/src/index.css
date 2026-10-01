@@ -1,25 +1,56 @@
 @import "tailwindcss";
 
+:root {
+  --bg-color: #0d1527;
+  --text-color: #f8fafc;
+  --bg-grad-1: rgba(14, 165, 233, 0.22);
+  --bg-grad-2: rgba(99, 102, 241, 0.16);
+  --bg-grad-3: rgba(20, 184, 166, 0.14);
+  --bg-grad-4: rgba(56, 189, 248, 0.12);
+  --grid-color: rgba(255, 255, 255, 0.045);
+}
+
+.theme-light {
+  --bg-color: #f1f5f9;
+  --text-color: #0f172a;
+  --bg-grad-1: rgba(14, 165, 233, 0.1);
+  --bg-grad-2: rgba(99, 102, 241, 0.08);
+  --bg-grad-3: rgba(20, 184, 166, 0.08);
+  --bg-grad-4: rgba(56, 189, 248, 0.05);
+  --grid-color: rgba(0, 0, 0, 0.045);
+}
+
+.theme-oled {
+  --bg-color: #000000;
+  --text-color: #f8fafc;
+  --bg-grad-1: transparent;
+  --bg-grad-2: transparent;
+  --bg-grad-3: transparent;
+  --bg-grad-4: transparent;
+  --grid-color: rgba(255, 255, 255, 0.02);
+}
+
 body {
-  background-color: #0d1527;
-  color: #f8fafc;
+  background-color: var(--bg-color);
+  color: var(--text-color);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   min-height: 100vh;
   margin: 0;
   background-image: 
-    radial-gradient(ellipse 85% 50% at 50% -10%, rgba(14, 165, 233, 0.22), transparent 75%),
-    radial-gradient(ellipse 70% 45% at 90% 15%, rgba(99, 102, 241, 0.16), transparent 65%),
-    radial-gradient(ellipse 65% 45% at 10% 40%, rgba(20, 184, 166, 0.14), transparent 65%),
-    radial-gradient(ellipse 75% 50% at 50% 95%, rgba(56, 189, 248, 0.12), transparent 70%);
+    radial-gradient(ellipse 85% 50% at 50% -10%, var(--bg-grad-1), transparent 75%),
+    radial-gradient(ellipse 70% 45% at 90% 15%, var(--bg-grad-2), transparent 65%),
+    radial-gradient(ellipse 65% 45% at 10% 40%, var(--bg-grad-3), transparent 65%),
+    radial-gradient(ellipse 75% 50% at 50% 95%, var(--bg-grad-4), transparent 70%);
   background-attachment: fixed;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* Custom Maker Grid Background Pattern */
 .bg-grid-pattern {
   background-size: 36px 36px;
   background-image: 
-    linear-gradient(to right, rgba(255, 255, 255, 0.045) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+    linear-gradient(to right, var(--grid-color) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-color) 1px, transparent 1px);
 }
 
 /* Custom Sleek Scrollbar */

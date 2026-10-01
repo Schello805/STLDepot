@@ -552,3 +552,44 @@ export function generateThumbnailSnapshot(geometry, color = '#38bdf8', width = 4
   snapshotQueue = task.catch(() => null);
   return task;
 }
+
+
+export const parseGCode = async (buffer) => {
+  return new Promise((resolve, reject) => {
+    try {
+      const text = new TextDecoder().decode(buffer);
+      const loader = new GCodeLoader();
+      const object = loader.parse(text);
+      
+      // GCodeLoader returns a Group containing Line segments.
+      // We need to calculate the bounding box.
+      const box = new THREE.Box3().setFromObject(object);
+      const size = new THREE.Vector3();
+      box.getSize(size);
+      
+      resolve({
+        object,
+        dimensions: size,
+        isGCode: true
+      });
+    } catch (err) {
+      reject(new Error('Fehler beim Parsen des G-Codes: ' + err.message));
+    }
+  });
+};
+
+export const parseBgcode = async (buffer) => {
+  try {
+    const zip = new JSZip();
+    const contents = await zip.loadAsync(buffer);
+    
+    // Find the .gcode file inside the .bgcode zip
+    const gcodeFile = Object.values(contents.files).find(f => f.name.endsWith('.gcode'));
+    if (!gcodeFile) throw new Error('Kein G-Code im .bgcode Archiv gefunden.');
+    
+    const gcodeBuffer = await gcodeFile.async('arraybuffer');
+    return await parseGCode(gcodeBuffer);
+  } catch (err) {
+    throw new Error('Fehler beim Entpacken der .bgcode Datei: ' + err.message);
+  }
+};
