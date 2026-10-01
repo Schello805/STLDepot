@@ -854,6 +854,34 @@ router.delete('/:id/files/:fileId', (req, res) => {
   }
 });
 
+// PATCH /api/models/:id/files/:fileId - Rename a single file in project
+router.patch('/:id/files/:fileId', (req, res) => {
+  try {
+    const { id, fileId } = req.params;
+    const { original_name } = req.body;
+    if (!original_name || typeof original_name !== 'string' || !original_name.trim()) {
+      return res.status(400).json({ success: false, error: 'Ungültiger Dateiname' });
+    }
+
+    const file = db.prepare('SELECT * FROM project_files WHERE id = ? AND project_id = ?').get(fileId, id);
+    if (!file) {
+      return res.status(404).json({ success: false, error: 'Datei nicht gefunden' });
+    }
+
+    let cleanName = sanitizeZipFilename(original_name.trim());
+    // Auto-preserve original extension if user removed it
+    const originalExt = path.extname(file.original_name);
+    if (originalExt && !cleanName.toLowerCase().endsWith(originalExt.toLowerCase())) {
+      cleanName += originalExt;
+    }
+
+    db.prepare('UPDATE project_files SET original_name = ? WHERE id = ? AND project_id = ?').run(cleanName, fileId, id);
+    res.json({ success: true, original_name: cleanName, message: 'Dateiname erfolgreich geändert' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // POST /api/models/batch-delete - Delete multiple models at once
 router.post('/batch-delete', (req, res) => {
   try {

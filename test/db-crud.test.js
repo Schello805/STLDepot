@@ -132,4 +132,24 @@ describe('Database & CRUD Cascade Integrity', () => {
     assert.equal(parsed.materials[0].price_per_kg, 21.50);
     assert.equal(parsed.currency, '€');
   });
+
+  it('updates and renames original_name in project_files table correctly', () => {
+    const db = createTestDB();
+    const projId = 'proj-rename-1';
+    const fileId = 'file-rename-1';
+
+    db.prepare('INSERT INTO projects (id, title) VALUES (?, ?)').run(projId, 'Test Projekt');
+    db.prepare(`
+      INSERT INTO project_files (id, project_id, filename, original_name, file_path, file_size, file_type)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(fileId, projId, 'hash123.stl', 'alter_name.stl', '/path/hash123.stl', 1024, 'stl');
+
+    // Rename file
+    const updateResult = db.prepare('UPDATE project_files SET original_name = ? WHERE id = ? AND project_id = ?')
+      .run('neuer_schöner_name.stl', fileId, projId);
+    assert.equal(updateResult.changes, 1);
+
+    const updated = db.prepare('SELECT original_name FROM project_files WHERE id = ?').get(fileId);
+    assert.equal(updated.original_name, 'neuer_schöner_name.stl');
+  });
 });

@@ -341,7 +341,7 @@ export default function SettingsModal({
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 mb-2 leading-relaxed">
-                Automatischer Material- & Kostenzuschlag für mehrfarbige 3MF-Modelle (Bambu AMS, Anycubic ACE Pro, Prusa MMU). Kompensiert Filament-Spülungen, Prime Tower und Übergangsabfall.
+                Automatischer Material- & Kostenzuschlag für mehrfarbige 3MF-Modelle (Bambu AMS, Anycubic ACE Pro, Prusa MMU). Kompensiert Filament-Wechsel, Prime Tower und Übergangsabfall.
               </p>
               <div className="flex items-center gap-3">
                 <input

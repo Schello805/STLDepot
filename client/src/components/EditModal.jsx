@@ -112,6 +112,43 @@ export default function EditModal({ model, onClose, onUpdated }) {
     }
   };
 
+  const [editingFileId, setEditingFileId] = useState(null);
+  const [editingFileName, setEditingFileName] = useState('');
+  const [renamingFile, setRenamingFile] = useState(false);
+
+  const startRenameFile = (file) => {
+    setEditingFileId(file.id);
+    setEditingFileName(file.original_name);
+  };
+
+  const handleSaveRenameFile = async (fileId) => {
+    if (!editingFileName.trim()) return;
+    setRenamingFile(true);
+    try {
+      const res = await fetch(`/api/models/${model.id}/files/${fileId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ original_name: editingFileName.trim() })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setFiles(prev => prev.map(f => f.id === fileId ? { ...f, original_name: data.original_name } : f));
+        setEditingFileId(null);
+        if (onUpdated) onUpdated();
+      } else {
+        await alert({
+          title: 'Fehler beim Umbenennen',
+          message: data.error || 'Dateiname konnte nicht geändert werden.',
+          type: 'error'
+        });
+      }
+    } catch (err) {
+      console.error('Failed to rename file:', err);
+    } finally {
+      setRenamingFile(false);
+    }
+  };
+
   const handleUploadExtraFiles = (e) => {
     if (e.target.files && e.target.files.length > 0) {
       setNewFiles(prev => [...prev, ...Array.from(e.target.files)]);
@@ -239,20 +276,71 @@ export default function EditModal({ model, onClose, onUpdated }) {
 
             <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
               {files.map((f) => (
-                <div key={f.id} className="flex items-center justify-between p-2 px-3 bg-slate-900 rounded-xl border border-slate-800 text-xs">
-                  <div className="flex items-center gap-2 truncate">
-                    <FileBox className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                    <span className="text-slate-200 truncate">{f.original_name}</span>
-                    <span className="text-slate-500 font-mono text-[10px]">({(f.file_size / 1024).toFixed(0)} KB)</span>
+                <div key={f.id} className="flex items-center justify-between p-2 px-3 bg-slate-900 rounded-xl border border-slate-800 text-xs gap-2">
+                  {editingFileId === f.id ? (
+                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                      <input
+                        type="text"
+                        value={editingFileName}
+                        onChange={(e) => setEditingFileName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleSaveRenameFile(f.id);
+                          } else if (e.key === 'Escape') {
+                            setEditingFileId(null);
+                          }
+                        }}
+                        autoFocus
+                        disabled={renamingFile}
+                        className="flex-1 px-2.5 py-1 bg-slate-950 border border-cyan-500 rounded-lg text-xs text-white focus:outline-none min-w-0"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleSaveRenameFile(f.id)}
+                        disabled={renamingFile}
+                        className="p-1 text-cyan-400 hover:text-cyan-300 transition"
+                        title="Speichern"
+                      >
+                        <Check className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingFileId(null)}
+                        className="p-1 text-slate-400 hover:text-slate-300 transition"
+                        title="Abbrechen"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 truncate flex-1 min-w-0">
+                      <FileBox className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                      <span className="text-slate-200 truncate" title={f.original_name}>{f.original_name}</span>
+                      <span className="text-slate-500 font-mono text-[10px] shrink-0">({(f.file_size / 1024).toFixed(0)} KB)</span>
+                    </div>
+                  )}
+                  
+                  <div className="flex items-center gap-1 shrink-0">
+                    {editingFileId !== f.id && (
+                      <button
+                        type="button"
+                        onClick={() => startRenameFile(f)}
+                        className="text-slate-400 hover:text-cyan-400 transition p-1"
+                        title="Dateiname umbenennen"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteExistingFile(f.id)}
+                      className="text-slate-500 hover:text-red-400 transition p-1"
+                      title="Datei aus Modell entfernen"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteExistingFile(f.id)}
-                    className="text-slate-500 hover:text-red-400 transition ml-2"
-                    title="Datei aus Modell entfernen"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
                 </div>
               ))}
 
