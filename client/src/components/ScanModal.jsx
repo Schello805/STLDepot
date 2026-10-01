@@ -119,6 +119,8 @@ export default function ScanModal({
       }
     }
 
+    const subfolderFilesCount = stlFiles.length - rootFileCount;
+
     setPickedFolderInfo({
       name: rootFolderName,
       allFiles: selectedFiles,
@@ -127,6 +129,7 @@ export default function ScanModal({
       groupList: Object.values(groups),
       subfolderCount: subfolderCount,
       rootFileCount: rootFileCount,
+      subfolderFilesCount: subfolderFilesCount,
       totalProjectsWhenPreserved: Object.keys(groups).length,
       count: stlFiles.length
     });
@@ -387,11 +390,11 @@ export default function ScanModal({
                       <span>Ordner: "{pickedFolderInfo.name}"</span>
                     </div>
                     <p className="text-xs text-amber-300/80 mt-1">
-                      <strong>{pickedFolderInfo.count}</strong> 3D-Dateien ({pickedFolderInfo.subfolderCount} Unterordner, {pickedFolderInfo.rootFileCount} Hauptdateien).
+                      <strong>{pickedFolderInfo.count}</strong> 3D-Dateien ({pickedFolderInfo.rootFileCount} im Hauptordner + {pickedFolderInfo.subfolderFilesCount} in {pickedFolderInfo.subfolderCount} Unterordnern).
                     </p>
                     <p className="text-[11px] text-slate-400 mt-0.5">
                       Modus: {structureMode === 'preserve' 
-                        ? `📁 ${pickedFolderInfo.totalProjectsWhenPreserved} Projekte (Baugruppen erhalten)` 
+                        ? `📁 ${pickedFolderInfo.totalProjectsWhenPreserved} Projekte (${pickedFolderInfo.rootFileCount} Einzelmodelle + ${pickedFolderInfo.subfolderCount} Baugruppen)` 
                         : `📄 ${pickedFolderInfo.count} Einzelmodelle im Katalog`}
                     </p>
                     {pickedFolderInfo.subfolderCount === 0 && (

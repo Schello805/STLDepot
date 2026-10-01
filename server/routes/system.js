@@ -6,27 +6,39 @@ import { execSync } from 'child_process';
 
 const router = express.Router();
 
+let cachedGitRevision = null;
+
 function getGitRevision() {
+  if (cachedGitRevision) return cachedGitRevision;
+
+  let result = null;
   try {
     const rev = execSync('git rev-parse --short HEAD', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
     let count = '';
     try {
       count = execSync('git rev-list --count HEAD', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
     } catch {}
-    if (count && rev) return `${count}.${rev}`;
-    if (rev) return rev;
+    if (count && rev) result = `${count}.${rev}`;
+    else if (rev) result = rev;
   } catch (e) {}
 
-  // Fallback to pre-generated version.json (essential for Docker and standalone bundles)
-  try {
-    const versionFile = new URL('../version.json', import.meta.url);
-    if (fs.existsSync(versionFile)) {
-      const parsed = JSON.parse(fs.readFileSync(versionFile, 'utf8'));
-      if (parsed.revision) return parsed.revision;
-    }
-  } catch {}
+  if (!result) {
+    // Fallback to pre-generated version.json (essential for Docker and standalone bundles)
+    try {
+      const versionFile = new URL('../version.json', import.meta.url);
+      if (fs.existsSync(versionFile)) {
+        const parsed = JSON.parse(fs.readFileSync(versionFile, 'utf8'));
+        if (parsed.revision) result = parsed.revision;
+      }
+    } catch {}
+  }
 
-  return '1.0.' + new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  if (!result) {
+    result = '1.0.' + new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  }
+
+  cachedGitRevision = result;
+  return result;
 }
 
 // GitHub Update Cache
@@ -54,7 +66,8 @@ async function checkGitUpdate() {
     const localShort = localSha ? localSha.slice(0, 7) : '';
 
     const response = await fetch('https://api.github.com/repos/Schello805/STLDepot/commits/main', {
-      headers: { 'User-Agent': 'STL-Storage-Hub-Update-Checker' }
+      headers: { 'User-Agent': 'STL-Storage-Hub-Update-Checker' },
+      signal: AbortSignal.timeout(2000) // max 2s timeout to prevent page hangs
     });
 
     if (response.ok) {
@@ -81,22 +94,26 @@ async function checkGitUpdate() {
   return updateCache;
 }
 
-// GET /api/system/info - Dynamic project metadata, revision, author info & update status
-router.get('/info', async (req, res) => {
+// GET /api/system/info - Dynamic project metadata, revision, author info & update status (instant < 2ms)
+router.get('/info', (req, res) => {
   try {
     const projectCount = db.prepare('SELECT COUNT(*) as count FROM projects').get().count;
     const fileCount = db.prepare('SELECT COUNT(*) as count FROM project_files').get().count;
     const totalSize = db.prepare('SELECT SUM(file_size) as size FROM project_files').get().size || 0;
 
     const revision = getGitRevision();
-    const updateInfo = await checkGitUpdate();
+
+    // Trigger update check in background without blocking this response
+    if (Date.now() - updateCache.checkedAt > 120000) {
+      checkGitUpdate().catch(() => {});
+    }
 
     res.json({
       success: true,
       app_name: 'STL-Storage Hub',
       version: '1.0.0',
       revision: revision,
-      update_info: updateInfo,
+      update_info: updateCache,
       author: 'Michael Schellenberger',
       license: 'CC BY-NC 4.0 (Creative Commons Non-Commercial)',
       github_repo: process.env.GITHUB_REPO_URL || 'https://github.com/Schello805/STLDepot',
@@ -104,7 +121,9 @@ router.get('/info', async (req, res) => {
         total_projects: projectCount,
         total_files: fileCount,
         total_storage_bytes: totalSize,
-        storage_formatted: (totalSize / (1024 * 1024)).toFixed(2) + ' MB'
+        storage_formatted: totalSize >= 1024 * 1024 * 1024
+          ? (totalSize / (1024 * 1024 * 1024)).toFixed(2).replace('.', ',') + ' GB'
+          : (totalSize / (1024 * 1024)).toFixed(1).replace('.', ',') + ' MB'
       },
       watch_dir: WATCH_DIR,
       models_dir: MODELS_DIR
@@ -125,13 +144,35 @@ router.get('/check-update', async (req, res) => {
   }
 });
 
-// POST /api/system/pull-update - Pull latest changes from git origin
+// POST /api/system/pull-update - Pull latest changes without overwriting local work
 router.post('/pull-update', (req, res) => {
   try {
-    const output = execSync('git pull origin main', { encoding: 'utf8', timeout: 30000 });
+    const localChanges = execSync('git status --porcelain', {
+      encoding: 'utf8',
+      timeout: 30000,
+      stdio: ['ignore', 'pipe', 'pipe']
+    }).trim();
+
+    if (localChanges) {
+      return res.status(409).json({
+        success: false,
+        error: 'Lokale Änderungen gefunden. Update abgebrochen, damit keine Dateien überschrieben werden.'
+      });
+    }
+
+    const output = execSync('git pull --ff-only origin main', {
+      encoding: 'utf8',
+      timeout: 30000,
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
     updateCache.checkedAt = 0;
     const newRev = getGitRevision();
-    res.json({ success: true, message: 'Update erfolgreich eingespielt!', output, revision: newRev });
+    res.json({
+      success: true,
+      message: 'Quellcode aktualisiert. Falls Abhängigkeiten geändert wurden, führe „stldepot update“ aus.',
+      output,
+      revision: newRev
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -200,8 +241,11 @@ router.get('/settings', (req, res) => {
           { id: 'TPU', name: 'TPU', density: 1.21, price_per_kg: 29.99, color: '#8b5cf6' }
         ],
         infill_factor: 0.35,
+        multicolor_waste_percent: 10,
         currency: '€'
       };
+    } else if (typeof settings.multicolor_waste_percent !== 'number') {
+      settings.multicolor_waste_percent = 10;
     }
     res.json({ success: true, settings });
   } catch (err) {
@@ -469,4 +513,3 @@ router.post('/recalculate-weights', async (req, res) => {
 });
 
 export default router;
-

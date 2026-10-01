@@ -4,6 +4,7 @@ import chokidar from 'chokidar';
 import crypto from 'crypto';
 import { db, MODELS_DIR, WATCH_DIR } from './db.js';
 import { updateProjectGeometry } from './utils/geometryCalculator.js';
+import { formatTitleFromFilename } from './utils/stringUtils.js';
 
 let watcher = null;
 
@@ -59,7 +60,7 @@ export function scanDirectory(targetDir = WATCH_DIR, preserveStructure = true, d
         }
       } else {
         try {
-          const folderTitle = path.basename(groupKey).replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+          const folderTitle = formatTitleFromFilename(path.basename(groupKey));
           const res = importMultiPartProjectFromDisk(fileList, folderTitle, groupKey, duplicateAction);
           handleResult(res, groupKey);
         } catch (err) {
@@ -197,8 +198,7 @@ function importMultiPartProjectFromDisk(fileList, folderTitle, groupKey, duplica
 
 function importSingleFileFromDisk(sourcePath, originalName, ext, duplicateAction = 'skip') {
   const stats = fs.statSync(sourcePath);
-  const baseName = path.basename(originalName, ext);
-  const title = baseName.replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const title = formatTitleFromFilename(originalName);
 
   // Check if file is already registered by original name and size or project title
   let existingProject = db.prepare('SELECT id FROM projects WHERE LOWER(title) = LOWER(?)').get(title);

@@ -45,7 +45,7 @@ Wähle die passende Installationsmethode für dein System:
 
 ### ⚡ Option 1: Linux One-Liner (Empfohlen für Ubuntu, Debian, Raspberry Pi, Proxmox LXC)
 
-Installiere STLDepot vollautomatisch mit einem einzigen Terminalbefehl. Das Skript richtet Node.js 20 LTS, alle Abhängigkeiten, den Produktions-Build sowie einen **Systemd-Hintergrunddienst** mit Autostart bei jedem Systemstart ein:
+Installiere STLDepot vollautomatisch mit einem einzigen Terminalbefehl. Das Skript richtet Node.js 24 LTS, alle Abhängigkeiten, den Produktions-Build sowie einen **Systemd-Hintergrunddienst** mit Autostart bei jedem Systemstart ein:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Schello805/STLDepot/main/install.sh | bash
@@ -54,10 +54,21 @@ curl -fsSL https://raw.githubusercontent.com/Schello805/STLDepot/main/install.sh
 Nach der Installation ist STLDepot sofort erreichbar unter:  
 👉 **`http://<DEINE-SERVER-IP>:3001`**
 
-#### 🛠️ Nützliche Systemd-Befehle:
-Das Installationsskript richtet auch den praktischen CLI-Befehl `stldepot` ein:
+#### 🛠️ System aktualisieren & verwalten:
+Du hast drei bequeme Möglichkeiten, STLDepot auf den neuesten Stand zu bringen:
 ```bash
-stldepot update     # Aktualisiert STLDepot automatisch auf die neueste GitHub-Version
+# Methode 1: Über den CLI-Befehl (wenn per install.sh installiert)
+stldepot update
+
+# Methode 2: Direkt aus dem Projektverzeichnis
+./update.sh
+
+# Methode 3: Per One-Liner von überall auf dem Server
+curl -fsSL https://raw.githubusercontent.com/Schello805/STLDepot/main/update.sh | bash
+```
+
+Weitere nützliche Befehle:
+```bash
 stldepot logs       # Zeigt die Live-Serverlogs an
 stldepot status     # Prüft den Status des Systemd-Dienstes
 stldepot restart    # Startet den Server neu
@@ -98,7 +109,7 @@ STLDepot bringt eine fertige `captain-definition` mit:
 
 ### 💻 Option 4: Manuelle Installation (macOS, Windows, Linux mit Node.js)
 
-**Voraussetzung:** [Node.js](https://nodejs.org/) (Version 18 oder neuer)
+**Voraussetzung:** [Node.js](https://nodejs.org/) (aktuelle LTS-Version empfohlen, mindestens Version 24)
 
 ```bash
 # 1. Klonen
@@ -189,6 +200,7 @@ STLDepot/
 │   ├── thumbnails/             # Generierte Foto-Vorschauen
 │   └── watch_import/           # Hot-Folder für automatischen Import
 ├── install.sh                  # ⚡ Automatischer Linux One-Liner Installer
+├── update.sh                   # 🔄 Automatisches Update-Skript
 ├── Dockerfile                  # Multi-Stage Produktions-Image
 ├── docker-compose.yml          # Container-Setup
 ├── captain-definition          # CapRover Deployment

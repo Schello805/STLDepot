@@ -4,6 +4,7 @@ import fs from 'fs';
 import crypto from 'crypto';
 import { db, MODELS_DIR, THUMBNAILS_DIR } from '../db.js';
 import { validatePublicUrl } from '../utils/urlSecurity.js';
+import { formatTitleFromFilename } from '../utils/stringUtils.js';
 
 const router = express.Router();
 
@@ -93,7 +94,7 @@ router.post('/', async (req, res) => {
       fs.writeFileSync(destPath, Buffer.from(buffer));
 
       const baseName = path.basename(new URL(trimmedUrl).pathname, `.${ext}`);
-      const title = decodeURIComponent(baseName).replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      const title = formatTitleFromFilename(decodeURIComponent(baseName));
 
       db.prepare(`
         INSERT INTO projects (

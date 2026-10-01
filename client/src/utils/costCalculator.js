@@ -14,6 +14,9 @@ export function calculateModelCost(model, materialSettings) {
     { id: 'TPU', name: 'TPU', density: 1.21, price_per_kg: 29.99 }
   ];
   const infillFactor = typeof materialSettings?.infill_factor === 'number' ? materialSettings.infill_factor : 0.35;
+  const multicolorWastePercent = typeof materialSettings?.multicolor_waste_percent === 'number'
+    ? materialSettings.multicolor_waste_percent 
+    : 10;
   const currency = materialSettings?.currency || '€';
 
   const filType = (model.filament_type || 'PLA').toUpperCase();
@@ -22,28 +25,44 @@ export function calculateModelCost(model, materialSettings) {
   const density = matchedMat?.density || 1.24;
   const pricePerKg = matchedMat?.price_per_kg || 19.99;
 
-  let weight = 0;
+  let baseWeight = 0;
   if (typeof model.weight_grams === 'number' && model.weight_grams > 0) {
-    weight = model.weight_grams;
+    baseWeight = model.weight_grams;
   } else if (typeof model.volume_cm3 === 'number' && model.volume_cm3 > 0) {
-    weight = model.volume_cm3 * density * infillFactor;
+    baseWeight = model.volume_cm3 * density * infillFactor;
   }
 
-  const priceRaw = (weight / 1000.0) * pricePerKg;
+  const isMultiColor = Boolean(model.is_multicolor);
+  const wastePercent = isMultiColor ? multicolorWastePercent : 0;
+  const wasteGrams = isMultiColor && baseWeight > 0 ? (baseWeight * wastePercent) / 100.0 : 0;
+  const totalWeight = baseWeight + wasteGrams;
+
+  const basePriceRaw = (baseWeight / 1000.0) * pricePerKg;
+  const wastePriceRaw = (wasteGrams / 1000.0) * pricePerKg;
+  const totalPriceRaw = basePriceRaw + wastePriceRaw;
+
   let formattedPrice = '';
-  if (weight > 0) {
-    formattedPrice = priceRaw < 0.01 ? `< 0,01 ${currency}` : `${priceRaw.toFixed(2).replace('.', ',')} ${currency}`;
+  if (totalWeight > 0) {
+    formattedPrice = totalPriceRaw < 0.01 
+      ? `< 0,01 ${currency}` 
+      : `${totalPriceRaw.toFixed(2).replace('.', ',')} ${currency}`;
   } else {
     formattedPrice = `-- ${currency}`;
   }
 
   return {
-    weight: parseFloat(weight.toFixed(1)),
-    weightFormatted: weight > 0 ? `~${weight.toFixed(1)}g` : '-- g',
+    weight: parseFloat(totalWeight.toFixed(1)),
+    baseWeight: parseFloat(baseWeight.toFixed(1)),
+    wasteGrams: parseFloat(wasteGrams.toFixed(1)),
+    weightFormatted: totalWeight > 0 ? `~${totalWeight.toFixed(1)}g` : '-- g',
     price: formattedPrice,
-    priceRaw,
+    priceRaw: totalPriceRaw,
+    basePriceRaw,
+    wastePriceRaw,
     materialName: matchedMat?.name || matchedMat?.id || 'PLA',
     pricePerKg,
-    currency
+    currency,
+    isMultiColor,
+    wastePercent
   };
 }

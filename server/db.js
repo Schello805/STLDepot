@@ -82,15 +82,23 @@ export function initDB() {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+
+    CREATE INDEX IF NOT EXISTS idx_project_files_project_id ON project_files (project_id);
+    CREATE INDEX IF NOT EXISTS idx_project_tags_project_id ON project_tags (project_id);
+    CREATE INDEX IF NOT EXISTS idx_projects_created_at ON projects (created_at);
+    CREATE INDEX IF NOT EXISTS idx_projects_category ON projects (category);
   `);
 
-  // Ensure volume_cm3 and weight_grams columns exist on projects
+  // Ensure volume_cm3, weight_grams and is_multicolor columns exist on projects
   const projectCols = db.prepare("PRAGMA table_info(projects)").all().map(c => c.name);
   if (!projectCols.includes('volume_cm3')) {
     db.exec(`ALTER TABLE projects ADD COLUMN volume_cm3 REAL DEFAULT 0`);
   }
   if (!projectCols.includes('weight_grams')) {
     db.exec(`ALTER TABLE projects ADD COLUMN weight_grams REAL DEFAULT 0`);
+  }
+  if (!projectCols.includes('is_multicolor')) {
+    db.exec(`ALTER TABLE projects ADD COLUMN is_multicolor INTEGER DEFAULT 0`);
   }
 
   // Seed default material settings if not set
@@ -105,12 +113,25 @@ export function initDB() {
         { id: 'TPU', name: 'TPU', density: 1.21, price_per_kg: 29.99, color: '#8b5cf6' }
       ],
       infill_factor: 0.35, // effective density with ~15% infill + 3 perimeters
+      multicolor_waste_percent: 10, // ~10% purge tower / filament change waste
       currency: '€'
     };
     db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run(
       'material_settings',
       JSON.stringify(defaultMaterialSettings)
     );
+  } else {
+    // Ensure existing settings include multicolor_waste_percent
+    try {
+      const parsed = JSON.parse(existingSettings.value);
+      if (typeof parsed.multicolor_waste_percent !== 'number') {
+        parsed.multicolor_waste_percent = 10;
+        db.prepare('UPDATE settings SET value = ? WHERE key = ?').run(
+          JSON.stringify(parsed),
+          'material_settings'
+        );
+      }
+    } catch {}
   }
 
   console.log('Database initialized successfully at:', DB_PATH);

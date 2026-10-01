@@ -5,7 +5,9 @@
 # Lizenz: CC BY-NC 4.0 | Entwickelt von Michael Schellenberger
 # ==============================================================================
 
-set -e
+set -Eeuo pipefail
+
+trap 'echo -e "${RED}❌ Installation bei Zeile ${LINENO} abgebrochen.${NC}"' ERR
 
 # Farben für Terminal-Ausgabe
 RED='\033[0;31m'
@@ -49,6 +51,7 @@ fi
 # 2. Zielverzeichnis festlegen
 INSTALL_DIR="/opt/stldepot"
 REPO_URL="https://github.com/Schello805/STLDepot.git"
+APP_PORT="3001"
 
 echo -e "${CYAN}➜ Prüfe System-Abhängigkeiten...${NC}"
 
@@ -62,25 +65,28 @@ elif command -v pacman >/dev/null 2>&1; then
   $SUDO_CMD pacman -Sy --noconfirm git curl base-devel >/dev/null 2>&1
 fi
 
-# 4. Node.js (mindestens v18, empfohlen v20 LTS) prüfen oder installieren
+# 4. Node.js 24 LTS prüfen oder installieren
+# Node 18 und 20 erhalten keine Sicherheitsupdates mehr. Für einen Server soll
+# daher mindestens die aktuelle LTS-Linie verwendet werden.
+REQUIRED_NODE_MAJOR=24
 NEED_NODE=false
 if ! command -v node >/dev/null 2>&1; then
   NEED_NODE=true
 else
   NODE_VER=$(node -v | cut -d'.' -f1 | sed 's/v//')
-  if [ "$NODE_VER" -lt 18 ]; then
-    echo -e "${YELLOW}⚠️ Installiertes Node.js ($NODE_VER) ist zu alt. Benötige Node 18+.${NC}"
+  if [ "$NODE_VER" -lt "$REQUIRED_NODE_MAJOR" ]; then
+    echo -e "${YELLOW}⚠️ Installiertes Node.js ($NODE_VER) ist zu alt. Benötige Node ${REQUIRED_NODE_MAJOR} LTS oder neuer.${NC}"
     NEED_NODE=true
   fi
 fi
 
 if [ "$NEED_NODE" = true ]; then
-  echo -e "${CYAN}➜ Installiere Node.js 20 LTS (NodeSource)...${NC}"
+  echo -e "${CYAN}➜ Installiere Node.js ${REQUIRED_NODE_MAJOR} LTS (NodeSource)...${NC}"
   if command -v apt-get >/dev/null 2>&1; then
-    curl -fsSL https://deb.nodesource.com/setup_20.x | $SUDO_CMD bash - >/dev/null 2>&1
+    curl -fsSL "https://deb.nodesource.com/setup_${REQUIRED_NODE_MAJOR}.x" | $SUDO_CMD bash -
     $SUDO_CMD apt-get install -y nodejs >/dev/null 2>&1
   else
-    echo -e "${RED}❌ Bitte installiere manuell Node.js 18+ und starte das Skript erneut.${NC}"
+    echo -e "${RED}❌ Bitte installiere manuell Node.js ${REQUIRED_NODE_MAJOR}+ und starte das Skript erneut.${NC}"
     exit 1
   fi
 fi
@@ -88,21 +94,28 @@ fi
 NODE_INSTALLED_VER=$(node -v)
 echo -e "${GREEN}✓ Node.js ist bereit: ${NODE_INSTALLED_VER}${NC}"
 
-# 5. Repository klonen oder aktualisieren
+# 5. Repository klonen oder sicher aktualisieren
 if [ -d "$INSTALL_DIR/.git" ]; then
   echo -e "${CYAN}➜ Aktualisiere bestehende Installation in ${INSTALL_DIR}...${NC}"
   cd "$INSTALL_DIR"
-  $SUDO_CMD git fetch origin main
-  $SUDO_CMD git reset --hard origin/main
+  if ! git diff --quiet || ! git diff --cached --quiet; then
+    echo -e "${RED}❌ Lokale Änderungen in ${INSTALL_DIR} gefunden. Abbruch, damit nichts überschrieben wird.${NC}"
+    echo -e "${YELLOW}   Bitte committe, sichere oder verwerfe die Änderungen und starte danach erneut.${NC}"
+    exit 1
+  fi
+  $SUDO_CMD git pull --ff-only origin main
+elif [ -e "$INSTALL_DIR" ]; then
+  echo -e "${RED}❌ ${INSTALL_DIR} existiert, ist aber keine Git-Installation von STLDepot.${NC}"
+  echo -e "${YELLOW}   Abbruch, damit keine vorhandenen Dateien gelöscht werden.${NC}"
+  exit 1
 else
   echo -e "${CYAN}➜ Klone STLDepot nach ${INSTALL_DIR}...${NC}"
-  $SUDO_CMD rm -rf "$INSTALL_DIR"
   $SUDO_CMD git clone "$REPO_URL" "$INSTALL_DIR"
   cd "$INSTALL_DIR"
 fi
 
 # 6. Berechtigungen anpassen
-CURRENT_USER=$(logname 2>/dev/null || echo "$SUDO_USER")
+CURRENT_USER="${SUDO_USER:-$(logname 2>/dev/null || true)}"
 if [ -z "$CURRENT_USER" ] || [ "$CURRENT_USER" = "root" ]; then
   CURRENT_USER="root"
 fi
@@ -110,7 +123,8 @@ $SUDO_CMD chown -R "$CURRENT_USER":"$CURRENT_USER" "$INSTALL_DIR"
 
 # 7. Abhängigkeiten installieren & Client kompilieren
 echo -e "${CYAN}➜ Installiere Backend- und Frontend-Abhängigkeiten (kann 1-2 Min. dauern)...${NC}"
-npm install --silent
+npm ci --silent
+npm ci --prefix client --silent
 
 echo -e "${CYAN}➜ Erzeuge optimierten Produktions-Build des Frontends...${NC}"
 npm run build --prefix client --silent
@@ -128,6 +142,8 @@ $SUDO_CMD bash -c "cat > ${SERVICE_FILE}" << EOF
 [Unit]
 Description=STLDepot - 3D Printing Storage Vault
 After=network.target
+Wants=network-online.target
+After=network-online.target
 
 [Service]
 Type=simple
@@ -137,7 +153,10 @@ ExecStart=${NODE_BIN_PATH} server/index.js
 Restart=always
 RestartSec=5
 Environment=NODE_ENV=production
-Environment=PORT=3001
+Environment=PORT=${APP_PORT}
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
 
 [Install]
 WantedBy=multi-user.target
@@ -151,20 +170,43 @@ $SUDO_CMD systemctl restart stldepot.service
 CLI_PATH="/usr/local/bin/stldepot"
 $SUDO_CMD bash -c "cat > ${CLI_PATH}" << 'EOF'
 #!/bin/bash
+SUDO_BIN=""
+if [ "$(id -u)" -ne 0 ]; then
+  if command -v sudo >/dev/null 2>&1; then
+    SUDO_BIN="sudo"
+  else
+    echo "Fehler: sudo ist nicht installiert und Befehl wird nicht als root ausgeführt."
+    exit 1
+  fi
+fi
+
 case "$1" in
   update)
-    echo "Aktualisiere STLDepot..."
-    cd /opt/stldepot && git pull origin main && npm install && npm run build --prefix client && sudo systemctl restart stldepot
-    echo "Aktualisierung abgeschlossen!"
+    if [ -f /opt/stldepot/update.sh ]; then
+      bash /opt/stldepot/update.sh
+    else
+      echo "Aktualisiere STLDepot..."
+      cd /opt/stldepot
+      if ! git diff --quiet || ! git diff --cached --quiet; then
+        echo "Lokale Änderungen gefunden. Update abgebrochen, damit nichts überschrieben wird."
+        exit 1
+      fi
+      git pull --ff-only origin main
+      npm ci
+      npm ci --prefix client
+      npm run build --prefix client
+      $SUDO_BIN systemctl restart stldepot
+      echo "Aktualisierung abgeschlossen!"
+    fi
     ;;
   restart)
-    sudo systemctl restart stldepot
+    $SUDO_BIN systemctl restart stldepot
     ;;
   status)
-    sudo systemctl status stldepot
+    $SUDO_BIN systemctl status stldepot
     ;;
   logs)
-    sudo journalctl -u stldepot -f
+    $SUDO_BIN journalctl -u stldepot -f
     ;;
   *)
     echo "Verwendung: stldepot {update|restart|status|logs}"
@@ -173,16 +215,48 @@ esac
 EOF
 $SUDO_CMD chmod +x "$CLI_PATH"
 
-# 11. IP-Adresse ermitteln
+# 11. Dienst und HTTP-Endpunkte prüfen
+echo -e "${CYAN}➜ Prüfe Dienst, API und Frontend...${NC}"
+if ! $SUDO_CMD systemctl is-active --quiet stldepot.service; then
+  echo -e "${RED}❌ Der Systemd-Dienst konnte nicht gestartet werden.${NC}"
+  echo -e "${YELLOW}   Details: sudo journalctl -u stldepot -n 50 --no-pager${NC}"
+  exit 1
+fi
+
+API_READY=false
+FRONTEND_READY=false
+for _attempt in {1..15}; do
+  if curl --fail --silent --show-error --max-time 3 "http://127.0.0.1:${APP_PORT}/api/system/info" >/dev/null 2>&1; then
+    API_READY=true
+  fi
+  if curl --fail --silent --show-error --max-time 3 "http://127.0.0.1:${APP_PORT}/" >/dev/null 2>&1; then
+    FRONTEND_READY=true
+  fi
+  if [ "$API_READY" = true ] && [ "$FRONTEND_READY" = true ]; then
+    break
+  fi
+  sleep 1
+done
+
+if [ "$API_READY" != true ] || [ "$FRONTEND_READY" != true ]; then
+  echo -e "${RED}❌ Dienst läuft, aber API oder Frontend antworten nicht korrekt.${NC}"
+  echo -e "${YELLOW}   Details: sudo journalctl -u stldepot -n 50 --no-pager${NC}"
+  exit 1
+fi
+echo -e "${GREEN}✓ Dienst aktiv – API und Frontend sind erreichbar.${NC}"
+
+# 12. IP-Adresse und Frontend-Adresse ermitteln
 IP_ADDR=$(hostname -I 2>/dev/null | awk '{print $1}')
 if [ -z "$IP_ADDR" ]; then
   IP_ADDR="localhost"
 fi
+FRONTEND_URL="http://${IP_ADDR}:${APP_PORT}"
 
 echo -e "\n${GREEN}${BOLD}================================================================${NC}"
 echo -e "${GREEN}${BOLD}🎉 Installation von STLDepot erfolgreich abgeschlossen!${NC}"
 echo -e "${GREEN}${BOLD}================================================================${NC}"
-echo -e "Weboberfläche aufrufen:   ${CYAN}${BOLD}http://${IP_ADDR}:3001${NC}"
+echo -e "Frontend im Netzwerk:     ${CYAN}${BOLD}${FRONTEND_URL}${NC}"
+echo -e "Frontend lokal:           ${CYAN}http://127.0.0.1:${APP_PORT}${NC}"
 echo -e "Lokaler Speicherordner:   ${YELLOW}${INSTALL_DIR}/data${NC}"
 echo -e "Auto-Import-Verzeichnis:  ${YELLOW}${INSTALL_DIR}/data/watch_import${NC}"
 echo -e "Systemd-Dienststatus:     ${CYAN}sudo systemctl status stldepot${NC}"

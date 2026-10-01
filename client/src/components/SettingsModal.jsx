@@ -14,7 +14,8 @@ import {
   Layers,
   Download,
   Upload,
-  Database
+  Database,
+  Palette
 } from 'lucide-react';
 import { useDialog } from '../context/DialogContext';
 
@@ -35,6 +36,7 @@ export default function SettingsModal({
       { id: 'TPU', name: 'TPU', density: 1.21, price_per_kg: 29.99, color: '#8b5cf6' }
     ],
     infill_factor: 0.35,
+    multicolor_waste_percent: 10,
     currency: '€'
   });
 
@@ -51,7 +53,12 @@ export default function SettingsModal({
 
   useEffect(() => {
     if (materialSettings && materialSettings.materials) {
-      setSettings(materialSettings);
+      setSettings({
+        ...materialSettings,
+        multicolor_waste_percent: typeof materialSettings.multicolor_waste_percent === 'number'
+          ? materialSettings.multicolor_waste_percent
+          : 10
+      });
     }
   }, [materialSettings, isOpen]);
 
@@ -319,6 +326,49 @@ export default function SettingsModal({
                 <span>20% (Leicht / Dünnwandig)</span>
                 <span>35% (Standard)</span>
                 <span>80% (Massiv)</span>
+              </div>
+            </div>
+
+            {/* Multicolor Purge Waste Surcharge */}
+            <div className="sm:col-span-2 pt-3 border-t border-slate-750/70">
+              <div className="flex items-center justify-between text-xs mb-1.5">
+                <span className="font-semibold text-slate-200 flex items-center gap-1.5">
+                  <Palette className="w-3.5 h-3.5 text-amber-400" />
+                  Farbwechsel-Zuschlag / Spülverlust (3MF Mehrfarbdruck)
+                </span>
+                <span className="font-mono font-bold text-amber-400">
+                  +{typeof settings.multicolor_waste_percent === 'number' ? settings.multicolor_waste_percent : 10}%
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 mb-2 leading-relaxed">
+                Automatischer Material- & Kostenzuschlag für mehrfarbige 3MF-Modelle (Bambu AMS, Anycubic ACE Pro, Prusa MMU). Kompensiert Filament-Spülungen, Prime Tower und Übergangsabfall.
+              </p>
+              <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  min="0"
+                  max="50"
+                  step="1"
+                  value={typeof settings.multicolor_waste_percent === 'number' ? settings.multicolor_waste_percent : 10}
+                  onChange={(e) => setSettings({ ...settings, multicolor_waste_percent: parseInt(e.target.value, 10) || 0 })}
+                  className="flex-1 accent-amber-400 h-1.5 bg-slate-750 rounded-lg cursor-pointer"
+                />
+                <div className="flex items-center gap-1 shrink-0">
+                  {[0, 5, 10, 15, 20].map(pct => (
+                    <button
+                      key={pct}
+                      type="button"
+                      onClick={() => setSettings({ ...settings, multicolor_waste_percent: pct })}
+                      className={`px-2 py-0.5 rounded text-[11px] font-mono font-medium transition ${
+                        (settings.multicolor_waste_percent ?? 10) === pct
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50'
+                          : 'bg-slate-800 hover:bg-slate-700 text-slate-400 border border-slate-700'
+                      }`}
+                    >
+                      {pct === 10 ? '10% (Empf.)' : `${pct}%`}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>

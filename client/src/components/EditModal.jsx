@@ -8,7 +8,8 @@ import {
   FileBox,
   Plus,
   Layers,
-  Upload
+  Upload,
+  Palette
 } from 'lucide-react';
 import { useDialog } from '../context/DialogContext';
 
@@ -20,6 +21,7 @@ export default function EditModal({ model, onClose, onUpdated }) {
   const [author, setAuthor] = useState(model?.author || '');
   const [filamentType, setFilamentType] = useState(model?.filament_type || 'PLA');
   const [filamentColor, setFilamentColor] = useState(model?.filament_color || '#38bdf8');
+  const [isMultiColor, setIsMultiColor] = useState(Boolean(model?.is_multicolor));
   const [infill, setInfill] = useState(model?.infill_percentage ?? 15);
   const [printTime, setPrintTime] = useState(model?.print_time_minutes || '');
   const [nozzleSize, setNozzleSize] = useState(model?.nozzle_size ?? 0.4);
@@ -138,6 +140,7 @@ export default function EditModal({ model, onClose, onUpdated }) {
           author: author.trim(),
           filament_type: filamentType,
           filament_color: filamentColor,
+          is_multicolor: isMultiColor ? 1 : 0,
           infill_percentage: infill,
           print_time_minutes: parseInt(printTime, 10) || 0,
           nozzle_size: nozzleSize,
@@ -346,6 +349,30 @@ export default function EditModal({ model, onClose, onUpdated }) {
                   className="flex-1 px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-slate-200 font-mono uppercase"
                 />
               </div>
+            </div>
+
+            {/* Multicolor Purge Waste Toggle */}
+            <div className="sm:col-span-2 p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Palette className="w-4 h-4 text-amber-400 shrink-0" />
+                <div>
+                  <span className="text-xs font-semibold text-slate-200 block">
+                    Mehrfarbdruck (3MF / Farbwechsel-Zuschlag)
+                  </span>
+                  <span className="text-[11px] text-slate-400">
+                    Schlägt ca. 10% Spülverlust (Purge Tower / Filamentwechsel) auf das Modellgewicht und den Druckpreis auf.
+                  </span>
+                </div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isMultiColor}
+                  onChange={(e) => setIsMultiColor(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-10 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+              </label>
             </div>
 
             <div>

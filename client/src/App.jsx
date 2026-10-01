@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspens
 import Navbar from './components/Navbar';
 import ModelCard from './components/ModelCard';
 import Footer from './components/Footer';
+import { formatTitleFromFilename } from './utils/formatUtils';
 
 // Code-split heavy modals and 3D dependencies
 const ViewerModal = lazy(() => import('./components/ViewerModal'));
@@ -263,7 +264,7 @@ export default function App() {
       while (nextIndex < total) {
         const i = nextIndex++;
         const item = items[i];
-        const formattedTitle = (item.name || 'Modell').replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        const formattedTitle = formatTitleFromFilename(item.name || 'Modell');
 
         setBackgroundUpload(prev => ({
           ...prev,
@@ -421,6 +422,25 @@ export default function App() {
       }
     } catch (err) {
       console.error('Failed to toggle favorite:', err);
+    }
+  };
+
+  const handleToggleMulticolor = async (model) => {
+    try {
+      const nextStatus = !model.is_multicolor;
+      const res = await fetch(`/api/models/${model.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_multicolor: nextStatus ? 1 : 0 })
+      });
+      if (res.ok) {
+        setModels(prev => prev.map(m => m.id === model.id ? { ...m, is_multicolor: nextStatus ? 1 : 0 } : m));
+        if (activeViewerModel && activeViewerModel.id === model.id) {
+          setActiveViewerModel(prev => ({ ...prev, is_multicolor: nextStatus ? 1 : 0 }));
+        }
+      }
+    } catch (err) {
+      console.error('Failed to toggle multicolor:', err);
     }
   };
 
@@ -740,6 +760,7 @@ export default function App() {
                   onEdit={(m) => setActiveEditModel(m)}
                   materialSettings={materialSettings}
                   onOpenSettings={() => setIsSettingsOpen(true)}
+                  onToggleMulticolor={handleToggleMulticolor}
                 />
               ))}
             </div>

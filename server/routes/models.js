@@ -3,11 +3,10 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-const archiver = require('archiver');
+import { ZipArchive } from 'archiver';
 import { db, MODELS_DIR, THUMBNAILS_DIR } from '../db.js';
 import { updateProjectGeometry } from '../utils/geometryCalculator.js';
+import { fixMulterFilename, formatTitleFromFilename, sanitizeZipFilename, setContentDisposition } from '../utils/stringUtils.js';
 const router = express.Router();
 
 // Multer storage for uploaded models and project images
@@ -16,6 +15,7 @@ const storage = multer.diskStorage({
     cb(null, MODELS_DIR);
   },
   filename: (req, file, cb) => {
+    file.originalname = fixMulterFilename(file.originalname);
     const ext = path.extname(file.originalname).toLowerCase();
     const uniqueName = `file_${crypto.randomBytes(8).toString('hex')}${ext}`;
     cb(null, uniqueName);
@@ -100,9 +100,25 @@ router.get('/', (req, res) => {
 
     const projects = db.prepare(query).all(...params);
 
-    // Fetch primary file and all files for each project
+    if (projects.length === 0) {
+      return res.json({ success: true, count: 0, data: [] });
+    }
+
+    // Fetch all files in a single batch query instead of N individual queries
+    const projectIds = projects.map(p => p.id);
+    const placeholders = projectIds.map(() => '?').join(',');
+    const allFiles = db.prepare(`SELECT * FROM project_files WHERE project_id IN (${placeholders}) ORDER BY created_at ASC`).all(...projectIds);
+
+    const filesByProjectId = new Map();
+    for (const f of allFiles) {
+      if (!filesByProjectId.has(f.project_id)) {
+        filesByProjectId.set(f.project_id, []);
+      }
+      filesByProjectId.get(f.project_id).push(f);
+    }
+
     const projectsWithFiles = projects.map(proj => {
-      const files = db.prepare('SELECT * FROM project_files WHERE project_id = ? ORDER BY created_at ASC').all(proj.id);
+      const files = filesByProjectId.get(proj.id) || [];
       const tags = proj.tags_list ? proj.tags_list.split(',') : [];
       return {
         ...proj,
@@ -197,6 +213,7 @@ router.post('/', upload.array('files', 50), (req, res) => {
       notes = '',
       tags = '[]',
       thumbnail_base64 = '',
+      is_multicolor = 0,
       duplicate_action = 'keep_both' // 'skip' | 'overwrite' | 'keep_both'
     } = req.body;
 
@@ -206,23 +223,34 @@ router.post('/', upload.array('files', 50), (req, res) => {
 
     const cleanTitle = title.trim();
 
-    // DUPLICATE DETECTION: Check if project already exists by exact/case-insensitive title or matching primary file
-    let existingProject = db.prepare('SELECT * FROM projects WHERE LOWER(title) = LOWER(?)').get(cleanTitle);
+    // Sanitize uploaded filenames for UTF-8 / umlaut consistency
+    if (req.files && req.files.length > 0) {
+      for (const file of req.files) {
+        file.originalname = fixMulterFilename(file.originalname);
+      }
+    }
 
-    if (!existingProject && req.files && req.files.length > 0) {
+    // DUPLICATE DETECTION: Check if exact file already exists (by original filename & exact byte size)
+    let fileMatch = null;
+    if (req.files && req.files.length > 0) {
       const firstFile = req.files[0];
-      const match = db.prepare(`
+      fileMatch = db.prepare(`
         SELECT p.* FROM projects p
         JOIN project_files pf ON p.id = pf.project_id
         WHERE pf.original_name = ? AND pf.file_size = ?
         LIMIT 1
       `).get(firstFile.originalname, firstFile.size);
-      if (match) {
-        existingProject = match;
-      }
     }
 
-    // CASE A: Duplicate detected & User chose "skip" (Do not import again)
+    let existingProject = null;
+    if (fileMatch) {
+      existingProject = fileMatch;
+    } else if (duplicate_action === 'overwrite') {
+      // In overwrite mode, also match by title if user wants to replace project by title
+      existingProject = db.prepare('SELECT * FROM projects WHERE LOWER(title) = LOWER(?)').get(cleanTitle);
+    }
+
+    // CASE A: Exact file duplicate detected & User chose "skip" (Do not import again)
     if (existingProject && duplicate_action === 'skip') {
       // Remove freshly uploaded temp files from disk to prevent orphaned files
       if (req.files && req.files.length > 0) {
@@ -238,6 +266,15 @@ router.post('/', upload.array('files', 50), (req, res) => {
         message: `Modell "${cleanTitle}" existiert bereits und wurde übersprungen.`,
         projectId: existingProject.id
       });
+    }
+
+    // If a different model shares the same title, disambiguate title (e.g. "Titel (2)") instead of dropping it
+    let finalTitle = cleanTitle;
+    if (!existingProject) {
+      let counter = 2;
+      while (db.prepare('SELECT id FROM projects WHERE LOWER(title) = LOWER(?)').get(finalTitle)) {
+        finalTitle = `${cleanTitle} (${counter++})`;
+      }
     }
 
     // CASE B: Duplicate detected & User chose "overwrite" (Update existing project)
@@ -351,15 +388,17 @@ router.post('/', upload.array('files', 50), (req, res) => {
       }
     }
 
+    const multiColorVal = (is_multicolor === 'true' || is_multicolor === '1' || is_multicolor === 1 || is_multicolor === true) ? 1 : 0;
+
     db.prepare(`
       INSERT INTO projects (
         id, title, description, category, author, license,
         thumbnail_url, filament_type, filament_color, infill_percentage,
-        print_time_minutes, nozzle_size, supports_needed, source_url, notes
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        print_time_minutes, nozzle_size, supports_needed, is_multicolor, source_url, notes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       projectId,
-      cleanTitle,
+      finalTitle,
       description.trim(),
       category.trim() || 'Allgemein',
       author.trim(),
@@ -371,6 +410,7 @@ router.post('/', upload.array('files', 50), (req, res) => {
       parseInt(print_time_minutes, 10) || 0,
       parseFloat(nozzle_size) || 0.4,
       supports_needed === 'true' || supports_needed === '1' || supports_needed === 1 ? 1 : 0,
+      multiColorVal,
       source_url.trim(),
       notes.trim()
     );
@@ -445,12 +485,16 @@ router.post('/batch', upload.array('files', 500), (req, res) => {
       filament_type = 'PLA',
       filament_color = '#38bdf8',
       author = '',
-      tags = '[]'
+      tags = '[]',
+      is_multicolor = 0,
+      duplicate_action = 'keep_both' // 'skip' | 'overwrite' | 'keep_both'
     } = req.body;
 
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ success: false, error: 'Keine Dateien empfangen' });
     }
+
+    const multiColorVal = (is_multicolor === 'true' || is_multicolor === '1' || is_multicolor === 1 || is_multicolor === true) ? 1 : 0;
 
     let tagList = [];
     try {
@@ -464,8 +508,8 @@ router.post('/batch', upload.array('files', 500), (req, res) => {
     const insertProject = db.prepare(`
       INSERT INTO projects (
         id, title, description, category, author, license,
-        filament_type, filament_color, infill_percentage, print_time_minutes
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        filament_type, filament_color, infill_percentage, print_time_minutes, is_multicolor
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const insertFile = db.prepare(`
@@ -482,11 +526,27 @@ router.post('/batch', upload.array('files', 500), (req, res) => {
 
     const transaction = db.transaction((files) => {
       for (const file of files) {
+        file.originalname = fixMulterFilename(file.originalname);
+
+        if (duplicate_action === 'skip') {
+          const match = db.prepare(`
+            SELECT project_id FROM project_files
+            WHERE original_name = ? AND file_size = ?
+            LIMIT 1
+          `).get(file.originalname, file.size);
+
+          if (match) {
+            if (file.path && fs.existsSync(file.path)) {
+              try { fs.unlinkSync(file.path); } catch {}
+            }
+            continue;
+          }
+        }
+
         const projectId = 'proj_' + crypto.randomBytes(8).toString('hex');
         const fileId = 'file_' + crypto.randomBytes(8).toString('hex');
         const ext = path.extname(file.originalname).toLowerCase();
-        const baseName = path.basename(file.originalname, ext);
-        const title = baseName.replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        const title = formatTitleFromFilename(file.originalname);
 
         let fileType = 'other';
         if (ext === '.stl') fileType = 'stl';
@@ -503,7 +563,8 @@ router.post('/batch', upload.array('files', 500), (req, res) => {
           filament_type || 'PLA',
           filament_color || '#38bdf8',
           15,
-          0
+          0,
+          multiColorVal
         );
 
         insertFile.run(
@@ -547,6 +608,14 @@ router.post('/batch', upload.array('files', 500), (req, res) => {
     });
   } catch (err) {
     console.error('Error in batch upload:', err);
+    // Cleanup freshly uploaded temp files from disk to prevent orphaned files
+    if (req.files && req.files.length > 0) {
+      for (const file of req.files) {
+        if (file.path && fs.existsSync(file.path)) {
+          try { fs.unlinkSync(file.path); } catch {}
+        }
+      }
+    }
     res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -566,6 +635,7 @@ router.put('/:id', (req, res) => {
       nozzle_size,
       supports_needed,
       is_favorite,
+      is_multicolor,
       source_url,
       notes,
       tags,
@@ -591,6 +661,10 @@ router.put('/:id', (req, res) => {
       }
     }
 
+    const multiColorVal = is_multicolor !== undefined 
+      ? ((is_multicolor === 'true' || is_multicolor === '1' || is_multicolor === 1 || is_multicolor === true) ? 1 : 0)
+      : null;
+
     db.prepare(`
       UPDATE projects SET
         title = COALESCE(?, title),
@@ -605,6 +679,7 @@ router.put('/:id', (req, res) => {
         nozzle_size = COALESCE(?, nozzle_size),
         supports_needed = COALESCE(?, supports_needed),
         is_favorite = COALESCE(?, is_favorite),
+        is_multicolor = COALESCE(?, is_multicolor),
         source_url = COALESCE(?, source_url),
         notes = COALESCE(?, notes),
         updated_at = CURRENT_TIMESTAMP
@@ -622,6 +697,7 @@ router.put('/:id', (req, res) => {
       nozzle_size !== undefined ? parseFloat(nozzle_size) : null,
       supports_needed !== undefined ? (supports_needed ? 1 : 0) : null,
       is_favorite !== undefined ? (is_favorite ? 1 : 0) : null,
+      multiColorVal,
       source_url,
       notes,
       projectId
@@ -700,6 +776,7 @@ router.post('/:id/files', upload.array('files', 20), (req, res) => {
     `);
 
     for (const file of req.files) {
+      file.originalname = fixMulterFilename(file.originalname);
       const fileId = 'file_' + crypto.randomBytes(8).toString('hex');
       const ext = path.extname(file.originalname).toLowerCase().replace('.', '');
       let fileType = 'other';
@@ -853,13 +930,15 @@ router.post('/batch-download', (req, res) => {
     }
 
     const dateStr = new Date().toISOString().slice(0, 10);
-    res.attachment(`stldepot-sammlung-${dateStr}.zip`);
+    const zipName = `stldepot-sammlung-${dateStr}.zip`;
+    res.type('application/zip');
+    setContentDisposition(res, zipName);
 
-    const archive = archiver('zip', { zlib: { level: 9 } });
+    const archive = new ZipArchive({ zlib: { level: 9 } });
     archive.pipe(res);
 
     for (const project of projects) {
-      const safeTitle = (project.title || 'Modell').replace(/[^a-zA-Z0-9äöüÄÖÜß_\- ]/g, '_').trim();
+      const safeTitle = sanitizeZipFilename(project.title || 'Modell');
       const files = db.prepare('SELECT * FROM project_files WHERE project_id = ?').all(project.id);
 
       for (const file of files) {
@@ -895,10 +974,11 @@ router.get('/:id/download', (req, res) => {
       return res.download(f.file_path, f.original_name);
     }
 
-    const safeTitle = (project.title || 'Modell').replace(/[^a-zA-Z0-9_\-]/g, '_');
-    res.attachment(`${safeTitle}.zip`);
+    const safeTitle = sanitizeZipFilename(project.title || 'Modell');
+    res.type('application/zip');
+    setContentDisposition(res, `${safeTitle}.zip`);
 
-    const archive = archiver('zip', { zlib: { level: 9 } });
+    const archive = new ZipArchive({ zlib: { level: 9 } });
     archive.pipe(res);
 
     for (const file of files) {

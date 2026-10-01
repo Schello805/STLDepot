@@ -99,4 +99,64 @@ describe('costCalculator - Material & Print Cost Engine', () => {
     assert.equal(calculateModelCost(null, defaultSettings), null);
     assert.equal(calculateModelCost(undefined, defaultSettings), null);
   });
+
+  it('applies default 10% multicolor purge waste surcharge when is_multicolor is true', () => {
+    // 100g PLA @ 20 €/kg = 2.00 €
+    // + 10% purge waste = +10g = 110g total -> 2.20 €
+    const model = {
+      filament_type: 'PLA',
+      weight_grams: 100,
+      is_multicolor: 1
+    };
+
+    const res = calculateModelCost(model, defaultSettings);
+    assert.ok(res);
+    assert.equal(res.isMultiColor, true);
+    assert.equal(res.wastePercent, 10);
+    assert.equal(res.baseWeight, 100);
+    assert.equal(res.wasteGrams, 10);
+    assert.equal(res.weight, 110);
+    assert.equal(res.weightFormatted, '~110.0g');
+    assert.equal(res.price, '2,20 €');
+    assert.equal(res.priceRaw, 2.2);
+  });
+
+  it('respects custom multicolor_waste_percent from settings', () => {
+    // 100g PLA @ 20 €/kg = 2.00 €
+    // + 15% purge waste = +15g = 115g total -> 2.30 €
+    const customSettings = {
+      ...defaultSettings,
+      multicolor_waste_percent: 15
+    };
+
+    const model = {
+      filament_type: 'PLA',
+      weight_grams: 100,
+      is_multicolor: true
+    };
+
+    const res = calculateModelCost(model, customSettings);
+    assert.ok(res);
+    assert.equal(res.isMultiColor, true);
+    assert.equal(res.wastePercent, 15);
+    assert.equal(res.wasteGrams, 15);
+    assert.equal(res.weight, 115);
+    assert.equal(res.price, '2,30 €');
+  });
+
+  it('does not apply multicolor waste surcharge when is_multicolor is false or 0', () => {
+    const model = {
+      filament_type: 'PLA',
+      weight_grams: 100,
+      is_multicolor: 0
+    };
+
+    const res = calculateModelCost(model, defaultSettings);
+    assert.ok(res);
+    assert.equal(res.isMultiColor, false);
+    assert.equal(res.wastePercent, 0);
+    assert.equal(res.wasteGrams, 0);
+    assert.equal(res.weight, 100);
+    assert.equal(res.price, '2,00 €');
+  });
 });

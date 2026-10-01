@@ -32,6 +32,7 @@ import {
   analyzeGeometry, 
   generateThumbnailSnapshot 
 } from '../utils/threeUtils';
+import { formatTitleFromFilename } from '../utils/formatUtils';
 import confetti from 'canvas-confetti';
 
 export default function UploadModal({ onClose, onUploadSuccess }) {
@@ -50,6 +51,7 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
   const [description, setDescription] = useState('');
   const [filamentType, setFilamentType] = useState('PLA');
   const [filamentColor, setFilamentColor] = useState('#38bdf8');
+  const [isMultiColor, setIsMultiColor] = useState(false);
   const [infill, setInfill] = useState(15);
   const [printTime, setPrintTime] = useState('');
   const [nozzleSize, setNozzleSize] = useState(0.4);
@@ -224,6 +226,10 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
       let geom;
       if (file.name.toLowerCase().endsWith('.3mf')) {
         geom = await parse3MF(buffer);
+        const hasColors = geom.hasAttribute('color') || !!geom.userData?.hasVertexColors || (geom.userData?.filamentColors && geom.userData.filamentColors.length > 1);
+        if (hasColors) {
+          setIsMultiColor(true);
+        }
       } else {
         geom = parseSTL(buffer);
       }
@@ -240,7 +246,7 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
           meshRef.current.material.dispose();
         }
 
-        const hasColors = geom.hasAttribute('color') || !!geom.userData?.hasVertexColors;
+        const hasColors = geom.hasAttribute('color') || !!geom.userData?.hasVertexColors || (geom.userData?.filamentColors && geom.userData.filamentColors.length > 1);
         const material = new THREE.MeshStandardMaterial({
           color: hasColors ? 0xffffff : new THREE.Color(filamentColor),
           vertexColors: hasColors,
@@ -283,8 +289,7 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
     }
 
     if (!title && validFiles[0]) {
-      const baseName = validFiles[0].name.replace(/\.[^/.]+$/, "");
-      const formattedTitle = baseName.replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      const formattedTitle = formatTitleFromFilename(validFiles[0].name);
       setTitle(formattedTitle);
     }
 
@@ -502,7 +507,7 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
       }
 
       // BULK MODE: Upload files as individual models in chunks
-      if (uploadMode === 'batch' && files.length > 1) {
+      if (uploadMode === 'batch') {
         const CHUNK_SIZE = 25;
         const totalFiles = files.length;
         let processed = 0;
@@ -514,6 +519,7 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
           formData.append('author', author.trim() || 'Michael Schellenberger');
           formData.append('filament_type', filamentType);
           formData.append('filament_color', filamentColor);
+          formData.append('is_multicolor', isMultiColor ? 1 : 0);
           formData.append('tags', JSON.stringify(tags));
 
           for (const file of chunk) {
@@ -554,6 +560,7 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
       formData.append('author', author.trim() || 'Michael Schellenberger');
       formData.append('filament_type', filamentType);
       formData.append('filament_color', filamentColor);
+      formData.append('is_multicolor', isMultiColor ? 1 : 0);
       formData.append('infill_percentage', infill);
       formData.append('print_time_minutes', parseInt(printTime, 10) || 0);
       formData.append('nozzle_size', nozzleSize);
@@ -967,6 +974,47 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
             </div>
           )}
 
+          {/* Mode Switcher when multiple files are selected */}
+          {files.length > 1 && (
+            <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-2xl space-y-2">
+              <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                Import-Modus für {files.length} Dateien:
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setUploadMode('batch')}
+                  className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-xs font-medium transition cursor-pointer ${
+                    uploadMode === 'batch'
+                      ? 'bg-cyan-950/60 border-cyan-500/60 text-cyan-200 shadow-md shadow-cyan-950/30'
+                      : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                  }`}
+                >
+                  <Files className="w-4 h-4 text-cyan-400 shrink-0" />
+                  <div className="text-left">
+                    <div className="font-bold">Massen-Import</div>
+                    <div className="text-[10px] text-slate-400">{files.length} separate Modelle</div>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUploadMode('assembly')}
+                  className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-xs font-medium transition cursor-pointer ${
+                    uploadMode === 'assembly'
+                      ? 'bg-cyan-950/60 border-cyan-500/60 text-cyan-200 shadow-md shadow-cyan-950/30'
+                      : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                  }`}
+                >
+                  <FolderArchive className="w-4 h-4 text-cyan-400 shrink-0" />
+                  <div className="text-left">
+                    <div className="font-bold">Baugruppe</div>
+                    <div className="text-[10px] text-slate-400">1 Modell mit {files.length} Teilen</div>
+                  </div>
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Simple Form Fields */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             
@@ -1022,6 +1070,35 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
                   className="flex-1 px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-slate-200 font-mono uppercase"
                 />
               </div>
+            </div>
+
+            {/* Multicolor Purge Waste Toggle */}
+            <div className="sm:col-span-2 p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Palette className="w-4 h-4 text-amber-400 shrink-0" />
+                <div>
+                  <span className="text-xs font-semibold text-slate-200 block flex items-center gap-1.5">
+                    Mehrfarbdruck (3MF / Farbwechsel-Zuschlag)
+                    {isMultiColor && (
+                      <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.2 rounded font-mono font-medium">
+                        +10% aktiv
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-[11px] text-slate-400">
+                    Schlägt ca. 10% Spülverlust (Purge Tower / Filamentwechsel) auf das Modellgewicht und den Druckpreis auf.
+                  </span>
+                </div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isMultiColor}
+                  onChange={(e) => setIsMultiColor(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-10 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+              </label>
             </div>
 
           </div>
@@ -1184,7 +1261,7 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
               ) : (
                 <>
                   <Check className="w-4 h-4" />
-                  <span>{files.length > 1 && uploadMode === 'batch' ? `Alle ${files.length} Modelle speichern` : 'Im Katalog speichern'}</span>
+                  <span>{uploadMode === 'batch' ? `Alle ${files.length} Modelle speichern` : 'Im Katalog speichern'}</span>
                 </>
               )}
             </button>

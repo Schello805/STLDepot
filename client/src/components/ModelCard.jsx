@@ -15,10 +15,12 @@ import {
   Share2,
   Printer,
   Check,
-  Coins
+  Coins,
+  Palette
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { calculateModelCost } from '../utils/costCalculator';
+import { thumbnailQueue } from '../utils/thumbnailQueue';
 
 export default function ModelCard({ 
   model, 
@@ -31,7 +33,8 @@ export default function ModelCard({
   isSelected = false,
   onToggleSelect,
   materialSettings,
-  onOpenSettings
+  onOpenSettings,
+  onToggleMulticolor
 }) {
   const [isHovered, setIsHovered] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -57,7 +60,7 @@ export default function ModelCard({
 
   const primaryModelFile = model.files?.find(f => f.file_type === 'stl' || f.file_type === '3mf');
 
-  // Auto-render 3D thumbnail in background if missing
+  // Auto-render 3D thumbnail in background if missing (queued, non-blocking)
   useEffect(() => {
     if (model.thumbnail_url) {
       setDynamicThumb(model.thumbnail_url);
@@ -70,47 +73,13 @@ export default function ModelCard({
       return;
     }
 
-    let isMounted = true;
-    const renderPreview = async () => {
-      try {
-        const response = await fetch(`/api/models/files/${primaryModelFile.id}/raw`);
-        if (!response.ok) throw new Error('Could not fetch 3D file for thumbnail');
-        const buffer = await response.arrayBuffer();
-
-        const { parseSTL, parse3MF, generateThumbnailSnapshot, extract3MFThumbnail } = await import('../utils/threeUtils');
-
-        let dataUrl = null;
-        if (primaryModelFile.file_type === '3mf') {
-          // Check for embedded slicer plate preview image first
-          dataUrl = await extract3MFThumbnail(buffer);
-          if (!dataUrl) {
-            const geom = await parse3MF(buffer);
-            dataUrl = await generateThumbnailSnapshot(geom, model.filament_color || '#38bdf8', 480, 360);
-          }
-        } else {
-          const geom = parseSTL(buffer);
-          dataUrl = await generateThumbnailSnapshot(geom, model.filament_color || '#38bdf8', 480, 360);
-        }
-        if (dataUrl && isMounted) {
-          setDynamicThumb(dataUrl);
-          // Persist to server in background
-          fetch(`/api/models/${model.id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ thumbnail_base64: dataUrl })
-          }).catch(() => {});
-        }
-      } catch (err) {
-        // Fallback gracefully
-      } finally {
-        if (isMounted) setLoadingThumb(false);
-      }
-    };
-
-    renderPreview();
+    const cancel = thumbnailQueue.enqueue(model, primaryModelFile, (dataUrl) => {
+      setDynamicThumb(dataUrl);
+      setLoadingThumb(false);
+    });
 
     return () => {
-      isMounted = false;
+      cancel();
     };
   }, [model.id, model.thumbnail_url, primaryModelFile]);
 
@@ -212,7 +181,7 @@ export default function ModelCard({
           </button>
         )}
 
-        {/* Top-Left Category & Multi-Part Badge */}
+        {/* Top-Left Category, Multi-Part & Multi-Color Badges */}
         <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 z-10">
           <span className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-slate-900/90 backdrop-blur-md text-cyan-300 border border-slate-700/80 shadow-sm">
             {model.category || 'Allgemein'}
@@ -222,6 +191,20 @@ export default function ModelCard({
               <Layers className="w-3 h-3 text-cyan-400" />
               {stlCount} Teile
             </span>
+          )}
+          {Boolean(model.is_multicolor) && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onToggleMulticolor) onToggleMulticolor(model);
+              }}
+              className="px-2 py-1 text-[11px] font-bold rounded-lg bg-amber-950/90 hover:bg-amber-900/90 backdrop-blur-md text-amber-300 border border-amber-600/60 shadow-sm flex items-center gap-1 transition cursor-pointer"
+              title={`Mehrfarbdruck (+${costInfo?.wastePercent || 10}% Spülverlust eingerechnet). Klicke zum Deaktivieren.`}
+            >
+              <Palette className="w-3 h-3 text-amber-400" />
+              +{costInfo?.wastePercent || 10}% Spülung
+            </button>
           )}
         </div>
 
@@ -277,7 +260,11 @@ export default function ModelCard({
           {/* 2. Gewicht */}
           <span 
             className="px-2 py-0.5 rounded-md bg-slate-800/90 border border-slate-700 text-slate-300 font-medium shadow-sm shrink-0"
-            title={costInfo?.weight > 0 ? `Berechnetes Modellgewicht: ${costInfo.weightFormatted}` : 'Gewicht'}
+            title={costInfo?.weight > 0 ? (
+              costInfo?.isMultiColor
+                ? `Berechnetes Gewicht: ${costInfo.weightFormatted} (Basis: ~${costInfo.baseWeight}g + ~${costInfo.wasteGrams}g Spülverlust / Purge Tower)`
+                : `Berechnetes Modellgewicht: ${costInfo.weightFormatted}`
+            ) : 'Gewicht'}
           >
             {costInfo?.weightFormatted || '-- g'}
           </span>
@@ -290,7 +277,11 @@ export default function ModelCard({
                 onOpenSettings();
               }
             }}
-            title={costInfo?.weight > 0 ? `Materialkosten: ${costInfo.price} (~${costInfo.weight}g ${costInfo.materialName} @ ${costInfo.pricePerKg} ${costInfo.currency}/kg). Klicke zum Anpassen der Preise.` : 'Druckkosten (Klicke für Einstellungen)'}
+            title={costInfo?.weight > 0 ? (
+              costInfo?.isMultiColor
+                ? `Materialkosten: ${costInfo.price} (~${costInfo.baseWeight}g Modell + ~${costInfo.wasteGrams}g Spülverlust [+${costInfo.wastePercent}%] @ ${costInfo.pricePerKg} ${costInfo.currency}/kg). Klicke zum Anpassen.`
+                : `Materialkosten: ${costInfo.price} (~${costInfo.weight}g ${costInfo.materialName} @ ${costInfo.pricePerKg} ${costInfo.currency}/kg). Klicke zum Anpassen der Preise.`
+            ) : 'Druckkosten (Klicke für Einstellungen)'}
             className="px-2 py-0.5 rounded-md bg-emerald-950/70 border border-emerald-500/40 text-emerald-300 font-bold shadow-sm hover:bg-emerald-900/80 hover:border-emerald-400 transition cursor-pointer shrink-0"
           >
             {costInfo?.price || '-- €'}

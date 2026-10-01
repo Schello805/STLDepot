@@ -140,6 +140,8 @@ async function calculate3MFGeometry(filePath, density, infillFactor) {
   const buf = fs.readFileSync(filePath);
   const zip = await JSZipModule.loadAsync(buf);
 
+  let isMultiColor = false;
+
   // 1. Check if Bambu / Orca / Prusa slicer metadata already has exact sliced weight!
   for (const name of Object.keys(zip.files)) {
     if (
@@ -149,6 +151,21 @@ async function calculate3MFGeometry(filePath, density, infillFactor) {
     ) {
       try {
         const text = await zip.files[name].async('text');
+
+        // Check for multiple filament colors or multiple extruders in metadata
+        const colorMatches = text.match(/\"filament_colour\":\s*\[(.*?)\]/s);
+        if (colorMatches) {
+          try {
+            const parsedColors = JSON.parse('[' + colorMatches[1] + ']');
+            if (Array.isArray(parsedColors) && parsedColors.length > 1) {
+              isMultiColor = true;
+            }
+          } catch {}
+        }
+        if (!isMultiColor && text.match(/<metadata\s+key=["']extruder["']\s+value=["']([2-9]|\d{2,})["']/i)) {
+          isMultiColor = true;
+        }
+
         // Check for sliced weight e.g. weight="42.5" or used_filament_g="42.5" or "weight": 42.5
         const wMatch = text.match(/used_filament_g[":=\s]+([0-9.]+)/i) || 
                        text.match(/weight[":=\s]+([0-9.]+)/i);
@@ -158,7 +175,8 @@ async function calculate3MFGeometry(filePath, density, infillFactor) {
           return {
             volumeCm3: parseFloat(approxVol.toFixed(2)),
             weightGrams: parseFloat(directWeight.toFixed(1)),
-            triangles: 0
+            triangles: 0,
+            isMultiColor
           };
         }
       } catch {}
@@ -174,6 +192,17 @@ async function calculate3MFGeometry(filePath, density, infillFactor) {
   for (const modelFile of modelFiles) {
     try {
       const xml = await modelFile.async('text');
+
+      if (!isMultiColor && (
+        xml.includes('<m:colorgroup') || 
+        xml.includes('<basematerials') || 
+        xml.includes('<m:multiproperties') ||
+        (xml.match(/<color\s+color=/g) || []).length > 1 ||
+        (xml.match(/pid=["'][^"']+["']/g) || []).length > 1
+      )) {
+        isMultiColor = true;
+      }
+
       const vMatches = [...xml.matchAll(/<vertex\s+x="([^"]+)"\s+y="([^"]+)"\s+z="([^"]+)"/g)];
       const tMatches = [...xml.matchAll(/<triangle\s+v1="([^"]+)"\s+v2="([^"]+)"\s+v3="([^"]+)"/g)];
 
@@ -209,11 +238,12 @@ async function calculate3MFGeometry(filePath, density, infillFactor) {
     return {
       volumeCm3: parseFloat(volumeCm3.toFixed(2)),
       weightGrams: parseFloat(weightGrams.toFixed(1)),
-      triangles: totalTriangles
+      triangles: totalTriangles,
+      isMultiColor
     };
   }
 
-  return { volumeCm3: 0, weightGrams: 0, triangles: 0 };
+  return { volumeCm3: 0, weightGrams: 0, triangles: 0, isMultiColor };
 }
 
 /**
@@ -222,7 +252,7 @@ async function calculate3MFGeometry(filePath, density, infillFactor) {
 export async function updateProjectGeometry(projectId) {
   try {
     const { db } = await import('../db.js');
-    const project = db.prepare('SELECT id, filament_type FROM projects WHERE id = ?').get(projectId);
+    const project = db.prepare('SELECT id, filament_type, is_multicolor FROM projects WHERE id = ?').get(projectId);
     if (!project) return;
 
     // Load material settings
@@ -239,10 +269,14 @@ export async function updateProjectGeometry(projectId) {
     const files = db.prepare('SELECT * FROM project_files WHERE project_id = ?').all(projectId);
     let totalVolume = 0;
     let totalWeight = 0;
+    let detectedMultiColor = false;
 
     for (const f of files) {
       if (!f.file_path || !fs.existsSync(f.file_path)) continue;
       const geo = await calculateFileGeometry(f.file_path, project.filament_type, density, infillFactor);
+      if (geo.isMultiColor) {
+        detectedMultiColor = true;
+      }
       if (geo.volumeCm3 > 0 || geo.weightGrams > 0) {
         totalVolume += geo.volumeCm3;
         totalWeight += geo.weightGrams;
@@ -251,9 +285,22 @@ export async function updateProjectGeometry(projectId) {
       }
     }
 
+    const updates = [];
+    const params = [];
+
     if (totalVolume > 0 || totalWeight > 0) {
-      db.prepare('UPDATE projects SET volume_cm3 = ?, weight_grams = ? WHERE id = ?')
-        .run(parseFloat(totalVolume.toFixed(2)), parseFloat(totalWeight.toFixed(1)), projectId);
+      updates.push('volume_cm3 = ?', 'weight_grams = ?');
+      params.push(parseFloat(totalVolume.toFixed(2)), parseFloat(totalWeight.toFixed(1)));
+    }
+
+    // If multi-color was detected in 3MF files and project is not already set to multicolor
+    if (detectedMultiColor && !project.is_multicolor) {
+      updates.push('is_multicolor = 1');
+    }
+
+    if (updates.length > 0) {
+      params.push(projectId);
+      db.prepare(`UPDATE projects SET ${updates.join(', ')} WHERE id = ?`).run(...params);
     }
   } catch (err) {
     console.warn(`[geometryCalculator] Could not update project ${projectId}:`, err.message);

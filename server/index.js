@@ -178,19 +178,27 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Static Thumbnails
-app.use('/api/thumbnails', express.static(THUMBNAILS_DIR));
+// Static Thumbnails with 1-day browser cache
+app.use('/api/thumbnails', express.static(THUMBNAILS_DIR, { maxAge: '1d' }));
 
 // API Routes
 app.use('/api/models', modelsRouter);
 app.use('/api/system', systemRouter);
 app.use('/api/web-import', webImportRouter);
 
-// Serve Client in production
+// Serve Client in production with browser caching (assets 1y, index.html no-cache)
 const clientDist = path.join(__dirname, '..', 'client', 'dist');
 if (fs.existsSync(clientDist)) {
-  app.use(express.static(clientDist));
+  app.use(express.static(clientDist, {
+    maxAge: '1y',
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('index.html')) {
+        res.setHeader('Cache-Control', 'no-cache');
+      }
+    }
+  }));
   app.use((req, res) => {
+    res.setHeader('Cache-Control', 'no-cache');
     res.sendFile(path.join(clientDist, 'index.html'));
   });
 }
