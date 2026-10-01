@@ -118,7 +118,7 @@ if command -v systemctl >/dev/null 2>&1; then
       echo -e "${GREEN}✓ Systemd-Dienst (stldepot.service) erfolgreich neu gestartet.${NC}"
       RESTARTED=true
     else
-      echo -e "${YELLOW}⚠️ Dienst konnte nicht verifiziert werden. Prüfe Status mit: sudo systemctl status stldepot${NC}"
+      echo -e "${YELLOW}⚠️ Dienst konnte nicht verifiziert werden. Prüfe Status mit: systemctl status stldepot${NC}"
     fi
   fi
 fi
