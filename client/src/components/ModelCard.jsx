@@ -22,7 +22,7 @@ import confetti from 'canvas-confetti';
 import { calculateModelCost } from '../utils/costCalculator';
 import { thumbnailQueue } from '../utils/thumbnailQueue';
 
-export default function ModelCard({ 
+export default function ModelCard({
   model, 
   onOpenViewer, 
   onOpenSlicer, 
@@ -34,7 +34,8 @@ export default function ModelCard({
   onToggleSelect,
   materialSettings,
   onOpenSettings,
-  onToggleMulticolor
+  onToggleMulticolor,
+  viewMode = 'grid'
 }) {
   const [isHovered, setIsHovered] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -45,48 +46,7 @@ export default function ModelCard({
   // Format file size
   const formatFileSize = (bytes) => {
     if (!bytes) return '0 KB';
-    if (bytes > 1024 * 1024) 
-  if (viewMode === 'list') {
-    return (
-      <div 
-        className={`group relative bg-slate-800/40 backdrop-blur-md border ${isSelected ? 'border-cyan-500 ring-1 ring-cyan-500/50' : 'border-slate-700/50'} rounded-xl p-3 flex flex-row items-center gap-4 hover:bg-slate-800/70 transition-all cursor-pointer shadow-sm`}
-        onClick={(e) => {
-          if (selectionMode) { e.preventDefault(); e.stopPropagation(); onToggleSelect(model.id); return; }
-          onOpenViewer(model);
-        }}
-      >
-        <div className="w-16 h-16 shrink-0 bg-slate-900 rounded-lg overflow-hidden relative">
-          <img src={`/api/models/${model.id}/thumbnail`} alt={model.title} className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; }} />
-          {model.source_url && <div className="absolute top-1 right-1 bg-black/60 rounded px-1"><Globe className="w-2.5 h-2.5 text-white" /></div>}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h3 className="text-slate-100 font-semibold truncate text-sm">{model.title}</h3>
-            {model.is_multi_color === 1 && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-400">MULTI</span>}
-          </div>
-          <div className="flex items-center gap-3 mt-1 text-xs text-slate-400">
-            <span className="flex items-center gap-1"><Folder className="w-3 h-3" /> {model.category || 'Deko'}</span>
-            <span className="flex items-center gap-1"><Layers className="w-3 h-3" /> {model.filament_type || 'PLA'}</span>
-            <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {model.print_time || '--:--'}</span>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity px-2">
-          <button onClick={(e) => { e.stopPropagation(); onOpenSlicer(model); }} className="p-2 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 rounded-lg">
-            <Printer className="w-4 h-4" />
-          </button>
-          <button onClick={(e) => { e.stopPropagation(); onOpenEdit(model); }} className="p-2 bg-slate-700/50 text-slate-300 hover:bg-slate-700 hover:text-white rounded-lg">
-            <Edit3 className="w-4 h-4" />
-          </button>
-          <button onClick={(e) => { e.stopPropagation(); onDelete(model.id, model.title); }} className="p-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-lg">
-            <Trash2 className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    if (bytes > 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
     return (bytes / 1024).toFixed(0) + ' KB';
   };
 
@@ -148,6 +108,42 @@ export default function ModelCard({
       onOpenViewer(model);
     }
   };
+
+  if (viewMode === 'list') {
+    return (
+      <div
+        className={`group relative bg-slate-800/40 backdrop-blur-md border ${isSelected ? 'border-cyan-500 ring-1 ring-cyan-500/50' : 'border-slate-700/50'} rounded-xl p-3 flex flex-row items-center gap-4 hover:bg-slate-800/70 transition-all cursor-pointer shadow-sm`}
+        onClick={handleCardClick}
+      >
+        <div className="w-16 h-16 shrink-0 bg-slate-900 rounded-lg overflow-hidden relative">
+          <img src={`/api/models/${model.id}/thumbnail`} alt={model.title} className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; }} />
+          {model.source_url && <div className="absolute top-1 right-1 bg-black/60 rounded px-1"><Globe className="w-2.5 h-2.5 text-white" /></div>}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <h3 className="text-slate-100 font-semibold truncate text-sm">{model.title}</h3>
+            {model.is_multi_color === 1 && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-400">MULTI</span>}
+          </div>
+          <div className="flex items-center gap-3 mt-1 text-xs text-slate-400">
+            <span className="flex items-center gap-1"><Folder className="w-3 h-3" /> {model.category || 'Deko'}</span>
+            <span className="flex items-center gap-1"><Layers className="w-3 h-3" /> {model.filament_type || 'PLA'}</span>
+            <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {model.print_time || '--:--'}</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity px-2">
+          <button onClick={(e) => { e.stopPropagation(); onOpenSlicer(model); }} className="p-2 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 rounded-lg">
+            <Printer className="w-4 h-4" />
+          </button>
+          <button onClick={(e) => { e.stopPropagation(); onEdit(model); }} className="p-2 bg-slate-700/50 text-slate-300 hover:bg-slate-700 hover:text-white rounded-lg">
+            <Edit3 className="w-4 h-4" />
+          </button>
+          <button onClick={(e) => { e.stopPropagation(); onDelete(model.id, model.title); }} className="p-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-lg">
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div 
