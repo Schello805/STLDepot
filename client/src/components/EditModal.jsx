@@ -448,7 +448,7 @@ export default function EditModal({ model, onClose, onUpdated }) {
                     Mehrfarbdruck (3MF / Farbwechsel-Zuschlag)
                   </span>
                   <span className="text-[11px] text-slate-400">
-                    Schlägt ca. 10% Spülverlust (Purge Tower / Filamentwechsel) auf das Modellgewicht und den Druckpreis auf.
+                    Schlägt ca. 10% Purge (Purge Tower / Filamentwechsel) auf das Modellgewicht und den Druckpreis auf.
                   </span>
                 </div>
               </div>

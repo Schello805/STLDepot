@@ -303,7 +303,7 @@ export default function ModelCard({
             className="px-2 py-0.5 rounded-md bg-slate-800/90 border border-slate-700 text-slate-300 font-medium shadow-sm shrink-0"
             title={costInfo?.weight > 0 ? (
               costInfo?.isMultiColor
-                ? `Berechnetes Gewicht: ${costInfo.weightFormatted} (Basis: ~${costInfo.baseWeight}g + ~${costInfo.wasteGrams}g Spülverlust / Purge Tower)`
+                ? `Berechnetes Gewicht: ${costInfo.weightFormatted} (Basis: ~${costInfo.baseWeight}g + ~${costInfo.wasteGrams}g Purge / Poop)`
                 : `Berechnetes Modellgewicht: ${costInfo.weightFormatted}`
             ) : 'Gewicht'}
           >
@@ -320,7 +320,7 @@ export default function ModelCard({
             }}
             title={costInfo?.weight > 0 ? (
               costInfo?.isMultiColor
-                ? `Materialkosten: ${costInfo.price} (~${costInfo.baseWeight}g Modell + ~${costInfo.wasteGrams}g Spülverlust [+${costInfo.wastePercent}%] @ ${costInfo.pricePerKg} ${costInfo.currency}/kg). Klicke zum Anpassen.`
+                ? `Materialkosten: ${costInfo.price} (~${costInfo.baseWeight}g Modell + ~${costInfo.wasteGrams}g Purge [+${costInfo.wastePercent}%] @ ${costInfo.pricePerKg} ${costInfo.currency}/kg). Klicke zum Anpassen.`
                 : `Materialkosten: ${costInfo.price} (~${costInfo.weight}g ${costInfo.materialName} @ ${costInfo.pricePerKg} ${costInfo.currency}/kg). Klicke zum Anpassen der Preise.`
             ) : 'Druckkosten (Klicke für Einstellungen)'}
             className="px-2 py-0.5 rounded-md bg-emerald-950/70 border border-emerald-500/40 text-emerald-300 font-bold shadow-sm hover:bg-emerald-900/80 hover:border-emerald-400 transition cursor-pointer shrink-0"

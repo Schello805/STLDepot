@@ -334,7 +334,7 @@ export default function SettingsModal({
               <div className="flex items-center justify-between text-xs mb-1.5">
                 <span className="font-semibold text-slate-200 flex items-center gap-1.5">
                   <Palette className="w-3.5 h-3.5 text-amber-400" />
-                  Farbwechsel-Zuschlag / Spülverlust (3MF Mehrfarbdruck)
+                  Farbwechsel-Zuschlag / Purge (3MF Mehrfarbdruck)
                 </span>
                 <span className="font-mono font-bold text-amber-400">
                   +{typeof settings.multicolor_waste_percent === 'number' ? settings.multicolor_waste_percent : 10}%

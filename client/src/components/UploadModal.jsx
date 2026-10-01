@@ -1086,7 +1086,7 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
                     )}
                   </span>
                   <span className="text-[11px] text-slate-400">
-                    Schlägt ca. 10% Spülverlust (Purge Tower / Filamentwechsel) auf das Modellgewicht und den Druckpreis auf.
+                    Schlägt ca. 10% Purge (Purge Tower / Filamentwechsel) auf das Modellgewicht und den Druckpreis auf.
                   </span>
                 </div>
               </div>
