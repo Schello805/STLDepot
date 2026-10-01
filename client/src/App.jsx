@@ -4,13 +4,24 @@ import ModelCard from './components/ModelCard';
 import Footer from './components/Footer';
 import { formatTitleFromFilename } from './utils/formatUtils';
 
+// Helper to auto-reload if dynamic chunk loading fails due to app update
+const safeLazy = (importFn) => lazy(async () => {
+  try {
+    return await importFn();
+  } catch (error) {
+    console.warn('Chunk load error, reloading page to get fresh assets...', error);
+    window.location.reload();
+    return new Promise(() => {}); // prevent render while reloading
+  }
+});
+
 // Code-split heavy modals and 3D dependencies
-const ViewerModal = lazy(() => import('./components/ViewerModal'));
-const UploadModal = lazy(() => import('./components/UploadModal'));
-const EditModal = lazy(() => import('./components/EditModal'));
-const SlicerModal = lazy(() => import('./components/SlicerModal'));
-const ScanModal = lazy(() => import('./components/ScanModal'));
-const SettingsModal = lazy(() => import('./components/SettingsModal'));
+const ViewerModal = safeLazy(() => import('./components/ViewerModal'));
+const UploadModal = safeLazy(() => import('./components/UploadModal'));
+const EditModal = safeLazy(() => import('./components/EditModal'));
+const SlicerModal = safeLazy(() => import('./components/SlicerModal'));
+const ScanModal = safeLazy(() => import('./components/ScanModal'));
+const SettingsModal = safeLazy(() => import('./components/SettingsModal'));
 import { 
   Box, 
   Plus, 

@@ -197,6 +197,12 @@ if (fs.existsSync(clientDist)) {
       }
     }
   }));
+
+  // For missing static assets (/assets/*), return 404 instead of index.html so browser catches stale chunk
+  app.use('/assets', (req, res) => {
+    res.status(404).type('text/plain').send('Asset not found');
+  });
+
   app.use((req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     res.sendFile(path.join(clientDist, 'index.html'));
