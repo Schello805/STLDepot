@@ -720,7 +720,6 @@ export default function App() {
         onOpenSettings={() => setIsSettingsOpen(true)}
         systemInfo={systemInfo}
         theme={theme} setTheme={setTheme} viewMode={viewMode} setViewMode={setViewMode}
-        setDarkMode={setDarkMode}
         sortBy={sortBy}
         setSortBy={setSortBy}
         backgroundUpload={backgroundUpload}
