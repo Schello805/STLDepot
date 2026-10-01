@@ -163,7 +163,7 @@ export default function App() {
   }, []);
 
   // Global Drag & Drop
-  const handleDragOver = useCallback((e) => {
+  const handleGlobalDragOver = useCallback((e) => {
     e.preventDefault();
     e.stopPropagation();
     if (e.dataTransfer.types.includes('Files')) {
@@ -171,14 +171,14 @@ export default function App() {
     }
   }, []);
 
-  const handleDragLeave = useCallback((e) => {
+  const handleGlobalDragLeave = useCallback((e) => {
     e.preventDefault();
     e.stopPropagation();
     if (e.currentTarget.contains(e.relatedTarget)) return;
     setGlobalDragActive(false);
   }, []);
 
-  const handleDrop = useCallback((e) => {
+  const handleGlobalDrop = useCallback((e) => {
     e.preventDefault();
     e.stopPropagation();
     setGlobalDragActive(false);
