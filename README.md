@@ -223,7 +223,7 @@ Dieses Projekt steht unter der **[Creative Commons Attribution-NonCommercial 4.0
 
 <img width="629" height="650" alt="Import" src="https://github.com/user-attachments/assets/d65f5b9e-31eb-4a22-bac6-7e284fdee101" />
 
-<img width="1033" height="641" alt="Detail View" src="https://github.com/user-attachments/assets/6cca79bc-e4cf-4176-ba86-2d70c28bbbf5" />
+<img width="1476" height="749" alt="Bildschirmfoto 2026-10-01 um 09 04 36" src="https://github.com/user-attachments/assets/a41e0871-0b53-47b9-bd5d-bb901400df23" />
 
 
 
