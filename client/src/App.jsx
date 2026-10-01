@@ -109,6 +109,19 @@ export default function App() {
     statusText: ''
   });
 
+  // Prevent accidental tab close or page leave while background upload is in progress
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (backgroundUpload.active) {
+        e.preventDefault();
+        e.returnValue = 'Upload läuft noch. Möchtest du die Seite wirklich verlassen?';
+        return e.returnValue;
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [backgroundUpload.active]);
+
   // Drag over window state
   const [isWindowDragOver, setIsWindowDragOver] = useState(false);
   const dragCounterRef = useRef(0);
