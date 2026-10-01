@@ -42,6 +42,7 @@ gltfLoader.setDRACOLoader(dracoLoader);
 export default function ThreeCanvas({ 
   fileUrl, 
   fileType = 'stl', 
+  previewIndex = 0,
   initialColor = '#38bdf8', 
   onGeometryLoaded, 
   interactive = true,
@@ -220,7 +221,7 @@ export default function ThreeCanvas({
         let geometry;
         const ext = fileType.toLowerCase();
         if (ext === '3mf') {
-          geometry = await parse3MF(arrayBuffer);
+          geometry = await parse3MF(arrayBuffer, previewIndex);
         } else {
           geometry = parseSTL(arrayBuffer);
         }
@@ -288,7 +289,7 @@ export default function ThreeCanvas({
     return () => {
       isMounted = false;
     };
-  }, [fileUrl, fileType]);
+  }, [fileUrl, fileType, previewIndex]);
 
   // Update material / color & clipping
   useEffect(() => {

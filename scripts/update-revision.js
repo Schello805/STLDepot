@@ -15,9 +15,14 @@ try {
     hash = execSync('git rev-parse --short HEAD', { cwd: rootDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
   } catch (e) {}
 
+  const packageData = JSON.parse(fs.readFileSync(path.join(rootDir, 'package.json'), 'utf8'));
+  const [major = '1', minor = '0'] = packageData.version.split('.');
+  const commitCount = parseInt(count, 10) || 0;
+
   const versionData = {
     revision: count && hash ? `${count}.${hash}` : `1.${hash || 'init'}`,
-    commitCount: parseInt(count, 10) || 0,
+    version: `${major}.${minor}.${commitCount}`,
+    commitCount,
     commitHash: hash,
     updatedAt: new Date().toISOString()
   };

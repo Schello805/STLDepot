@@ -133,6 +133,35 @@ export function decodeSlotFromPaintColor(str) {
   return null;
 }
 
+function get3MFMetadataValue(element, key) {
+  return Array.from(element.getElementsByTagName('*'))
+    .find(child => child.localName.toLowerCase() === 'metadata' && child.getAttribute('key') === key)
+    ?.getAttribute('value') || '';
+}
+
+function parse3MFTransform(transform) {
+  if (!transform) return new THREE.Matrix4();
+  const values = transform.trim().split(/\s+/).map(Number);
+  if (values.length !== 12 || values.some(value => !Number.isFinite(value))) return new THREE.Matrix4();
+
+  return new THREE.Matrix4().set(
+    values[0], values[3], values[6], values[9],
+    values[1], values[4], values[7], values[10],
+    values[2], values[5], values[8], values[11],
+    0, 0, 0, 1
+  );
+}
+
+function resolve3MFPath(path, currentPath) {
+  const segments = path.startsWith('/') ? [] : currentPath.split('/').slice(0, -1);
+  for (const segment of path.split('/')) {
+    if (!segment || segment === '.') continue;
+    if (segment === '..') segments.pop();
+    else segments.push(segment);
+  }
+  return segments.join('/');
+}
+
 /**
  * Extract embedded slicer preview thumbnail (plate_1.png etc.) from 3MF package if available
  */
@@ -159,7 +188,7 @@ export async function extract3MFThumbnail(buffer) {
 /**
  * Parses 3MF XML model package from buffer using JSZip with multi-object, Bambu/OrcaSlicer color & 3MF material support
  */
-export async function parse3MF(buffer) {
+export async function parse3MF(buffer, previewIndex = 0) {
   const zip = await JSZip.loadAsync(buffer);
 
   // 1. Extract filament colors from Bambu / OrcaSlicer project config if present
@@ -180,10 +209,12 @@ export async function parse3MF(buffer) {
   // 2. Extract object/part extruders from model_settings.config
   const objectExtruders = {};
   const partExtruders = {};
+  let modelSettingsText = '';
   const modelSettingsFile = zip.file(/Metadata\/model_settings\.config$/i)?.[0];
   if (modelSettingsFile) {
     try {
-      const text = await modelSettingsFile.async('text');
+      modelSettingsText = await modelSettingsFile.async('text');
+      const text = modelSettingsText;
       const objMatches = text.matchAll(/<object\s+id=["']([^"']+)["'][^>]*>([\s\S]*?)<\/object>/gi);
       for (const match of objMatches) {
         const objId = match[1];
@@ -231,15 +262,101 @@ export async function parse3MF(buffer) {
     throw new Error('Keine 3D-Modelldatei (.model) im 3MF Paket gefunden');
   }
 
+  const modelDocuments = new Map();
+  for (const modelFile of modelFiles) {
+    const text = await modelFile.async('text');
+    const xmlDoc = new DOMParser().parseFromString(text, 'text/xml');
+    modelDocuments.set(modelFile.name.replace(/^\//, ''), { text, xmlDoc });
+  }
+
+  let previewOptions = [];
+  if (modelSettingsText) {
+    const settingsDoc = new DOMParser().parseFromString(modelSettingsText, 'text/xml');
+    const plateNodes = Array.from(settingsDoc.getElementsByTagName('*'))
+      .filter(element => element.localName.toLowerCase() === 'plate');
+    const plates = plateNodes.map((plate, index) => {
+      const instances = Array.from(plate.getElementsByTagName('*'))
+        .filter(element => element.localName.toLowerCase() === 'model_instance');
+      const objectIds = instances
+        .map(instance => get3MFMetadataValue(instance, 'object_id'))
+        .filter(Boolean);
+      const id = get3MFMetadataValue(plate, 'plater_id') || String(index + 1);
+      const name = get3MFMetadataValue(plate, 'plater_name') || `Platte ${id}`;
+      return { id, name, objectIds };
+    }).filter(plate => plate.objectIds.length > 0);
+
+    if (plates.length > 1) {
+      previewOptions = plates.map(plate => ({ ...plate, type: 'plate' }));
+    } else if (plates[0]?.objectIds.length > 1) {
+      previewOptions = plates[0].objectIds.map((objectId, index) => ({
+        id: `${plates[0].id}-${objectId}`,
+        name: `Objekt ${index + 1}`,
+        objectIds: [objectId],
+        type: 'object'
+      }));
+    }
+  }
+
+  let selectedTransforms = null;
+  if (previewOptions.length > 1) {
+    const mainModelPath = modelFiles.find(file => /(?:^|\/)3dmodel\.model$/i.test(file.name))?.name.replace(/^\//, '');
+    const mainDocument = modelDocuments.get(mainModelPath)?.xmlDoc;
+    const selectedOption = previewOptions[Math.min(Math.max(previewIndex, 0), previewOptions.length - 1)];
+    const selectedIds = new Set(selectedOption.objectIds);
+    const transformsByObject = new Map();
+
+    const collectObject = (modelPath, objectId, transform, pathStack = new Set()) => {
+      const key = `${modelPath}#${objectId}`;
+      if (pathStack.has(key)) return;
+      const model = modelDocuments.get(modelPath);
+      if (!model) return;
+
+      const object = Array.from(model.xmlDoc.getElementsByTagName('*'))
+        .find(element => element.localName.toLowerCase() === 'object' && element.getAttribute('id') === objectId);
+      if (!object) return;
+
+      const nextPathStack = new Set(pathStack).add(key);
+      const children = Array.from(object.getElementsByTagName('*'));
+      if (children.some(element => element.localName.toLowerCase() === 'mesh')) {
+        const transforms = transformsByObject.get(key) || [];
+        transforms.push(transform);
+        transformsByObject.set(key, transforms);
+      }
+
+      for (const component of children.filter(element => element.localName.toLowerCase() === 'component')) {
+        const childId = component.getAttribute('objectid');
+        const childPathAttr = component.getAttribute('p:path') || component.getAttribute('path') || '';
+        if (!childId) continue;
+        const childPath = childPathAttr
+          ? resolve3MFPath(childPathAttr, modelPath)
+          : modelPath;
+        const childTransform = transform.clone().multiply(parse3MFTransform(component.getAttribute('transform')));
+        collectObject(childPath, childId, childTransform, nextPathStack);
+      }
+    };
+
+    if (mainDocument && mainModelPath) {
+      const buildItems = Array.from(mainDocument.getElementsByTagName('*'))
+        .filter(element => element.localName.toLowerCase() === 'item' && element.parentElement?.localName.toLowerCase() === 'build');
+      for (const item of buildItems) {
+        const objectId = item.getAttribute('objectid');
+        if (selectedIds.has(objectId)) {
+          collectObject(mainModelPath, objectId, parse3MFTransform(item.getAttribute('transform')));
+        }
+      }
+    }
+
+    if (transformsByObject.size > 0) selectedTransforms = transformsByObject;
+    else previewOptions = [];
+  }
+
   const positions = [];
   const colors = [];
   let hasAnyColor = false;
 
   for (const modelFile of modelFiles) {
-    const modelXmlText = await modelFile.async('text');
-    const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(modelXmlText, 'text/xml');
     const relName = modelFile.name.replace(/^\//, '');
+    const { xmlDoc } = modelDocuments.get(relName);
 
     // Parse Standard 3MF Color Groups & Base Materials
     const colorGroups = {};
@@ -262,6 +379,10 @@ export async function parse3MF(buffer) {
 
     for (const objEl of objectsToProcess) {
       const objId = objEl.getAttribute('id') || '1';
+      const objectTransforms = selectedTransforms
+        ? selectedTransforms.get(`${relName}#${objId}`) || []
+        : [null];
+      if (objectTransforms.length === 0) continue;
       const objExtruder = compExtruders[relName + '#' + objId] || objectExtruders[objId] || 1;
       const defaultHex = filamentColours[objExtruder - 1] || null;
 
@@ -283,10 +404,6 @@ export async function parse3MF(buffer) {
           const v3 = rawVertices[parseInt(t.getAttribute('v3'), 10)];
           if (!v1 || !v2 || !v3) continue;
 
-          positions.push(v1.x, v1.y, v1.z);
-          positions.push(v2.x, v2.y, v2.z);
-          positions.push(v3.x, v3.y, v3.z);
-
           // Resolve color
           let triHex = defaultHex;
           const paintColorAttr = t.getAttribute('paint_color');
@@ -304,11 +421,26 @@ export async function parse3MF(buffer) {
           }
 
           const rgb = hexToRgb(triHex);
-          if (rgb) {
-            hasAnyColor = true;
-            colors.push(...rgb, ...rgb, ...rgb);
-          } else {
-            colors.push(0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7);
+          for (const transform of objectTransforms) {
+            for (const vertex of [v1, v2, v3]) {
+              if (transform) {
+                const e = transform.elements;
+                positions.push(
+                  e[0] * vertex.x + e[4] * vertex.y + e[8] * vertex.z + e[12],
+                  e[1] * vertex.x + e[5] * vertex.y + e[9] * vertex.z + e[13],
+                  e[2] * vertex.x + e[6] * vertex.y + e[10] * vertex.z + e[14]
+                );
+              } else {
+                positions.push(vertex.x, vertex.y, vertex.z);
+              }
+            }
+
+            if (rgb) {
+              hasAnyColor = true;
+              colors.push(...rgb, ...rgb, ...rgb);
+            } else {
+              colors.push(0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7);
+            }
           }
         }
       }
@@ -316,7 +448,7 @@ export async function parse3MF(buffer) {
   }
 
   // Regex fallback if DOM parser didn't find triangles
-  if (positions.length === 0) {
+  if (positions.length === 0 && !selectedTransforms) {
     for (const modelFile of modelFiles) {
       const xml = await modelFile.async('text');
       const vertexRegex = /<(?:\w+:)?vertex\b[^>]*\bx=["']([^"']+)["'][^>]*\by=["']([^"']+)["'][^>]*\bz=["']([^"']+)["'][^>]*\/?>/gi;
@@ -376,6 +508,8 @@ export async function parse3MF(buffer) {
     geometry.userData.hasVertexColors = true;
   }
   geometry.userData.filamentColors = filamentColours;
+  geometry.userData.previewOptions = selectedTransforms ? previewOptions : [];
+  geometry.userData.activePreviewIndex = selectedTransforms ? Math.min(Math.max(previewIndex, 0), previewOptions.length - 1) : 0;
   geometry.computeVertexNormals();
   return geometry;
 }

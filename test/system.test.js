@@ -10,8 +10,13 @@ describe('System, Revision & Version Sync', () => {
 
     const content = JSON.parse(fs.readFileSync(versionPath, 'utf8'));
     assert.ok(content.revision, 'Should have a revision field');
+    assert.match(content.version, /^\d+\.\d+\.\d+$/, 'Should have a semantic app version');
     assert.ok(typeof content.commitCount === 'number', 'commitCount should be a number');
     assert.ok(content.commitHash, 'Should have commitHash');
+
+    const packageVersion = JSON.parse(fs.readFileSync('package.json', 'utf8')).version;
+    const [major, minor] = packageVersion.split('.');
+    assert.equal(content.version, `${major}.${minor}.${content.commitCount}`);
 
     // Revision should follow count.hash (e.g. 26.dfadbf8)
     const parts = content.revision.split('.');

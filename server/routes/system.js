@@ -41,6 +41,20 @@ function getGitRevision() {
   return result;
 }
 
+function getAppVersion(revision) {
+  try {
+    const packageFile = new URL('../../package.json', import.meta.url);
+    const packageVersion = JSON.parse(fs.readFileSync(packageFile, 'utf8')).version;
+    const [major = '1', minor = '0'] = packageVersion.split('.');
+    const commitCount = Number.parseInt(revision.split('.')[0], 10);
+    if (Number.isInteger(commitCount) && commitCount >= 0) {
+      return `${major}.${minor}.${commitCount}`;
+    }
+  } catch {}
+
+  return '1.0.0';
+}
+
 // GitHub Update Cache
 let updateCache = {
   checkedAt: 0,
@@ -111,7 +125,7 @@ router.get('/info', (req, res) => {
     res.json({
       success: true,
       app_name: 'STL-Storage Hub',
-      version: '1.0.0',
+      version: getAppVersion(revision),
       revision: revision,
       update_info: updateCache,
       author: 'Michael Schellenberger',

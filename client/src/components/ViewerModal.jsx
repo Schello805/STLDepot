@@ -20,7 +20,9 @@ import {
   Heart,
   QrCode,
   Coins,
-  Settings
+  Settings,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { generateThumbnailSnapshot } from '../utils/threeUtils';
@@ -40,8 +42,11 @@ export default function ViewerModal({
   const modelFiles = model?.files?.filter(f => f.file_type === 'stl' || f.file_type === '3mf') || [];
   const imageFiles = model?.files?.filter(f => f.file_type === 'image') || [];
   const otherFiles = model?.files?.filter(f => f.file_type !== 'stl' && f.file_type !== '3mf' && f.file_type !== 'image') || [];
+  const isViewerOpen = Boolean(model);
 
   const [selectedFile, setSelectedFile] = useState(modelFiles[0] || null);
+  const [previewIndex, setPreviewIndex] = useState(0);
+  const [previewOptions, setPreviewOptions] = useState([]);
   const [activeTab, setActiveTab] = useState('3d'); // '3d', 'gallery', 'files', 'notes'
   const [meshStats, setMeshStats] = useState(null);
   const [currentGeometry, setCurrentGeometry] = useState(null);
@@ -54,6 +59,20 @@ export default function ViewerModal({
       setSelectedFile(modelFiles[0]);
     }
   }, [model, modelFiles.length, selectedFile]);
+
+  useEffect(() => {
+    if (!isViewerOpen) return;
+
+    const bodyOverflow = document.body.style.overflow;
+    const documentOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = bodyOverflow;
+      document.documentElement.style.overflow = documentOverflow;
+    };
+  }, [isViewerOpen]);
 
   if (!model) return null;
 
@@ -98,8 +117,27 @@ export default function ViewerModal({
     window.location.href = `/api/models/files/${fileId}/download`;
   };
 
+  const selectAdjacentFile = (direction) => {
+    if (previewOptions.length > 1) {
+      setPreviewIndex(index => (index + direction + previewOptions.length) % previewOptions.length);
+      return;
+    }
+    if (modelFiles.length < 2) return;
+    const currentIndex = modelFiles.findIndex(file => file.id === selectedFile?.id);
+    const nextIndex = (currentIndex + direction + modelFiles.length) % modelFiles.length;
+    setSelectedFile(modelFiles[nextIndex]);
+    setPreviewIndex(0);
+    setPreviewOptions([]);
+  };
+
+  const selectFile = (file) => {
+    setSelectedFile(file);
+    setPreviewIndex(0);
+    setPreviewOptions([]);
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/80 backdrop-blur-md overscroll-contain animate-in fade-in duration-200">
       <div 
         className="relative w-full max-w-6xl max-h-[92vh] bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
@@ -190,7 +228,7 @@ export default function ViewerModal({
                 {modelFiles.map((file) => (
                   <button
                     key={file.id}
-                    onClick={() => setSelectedFile(file)}
+                    onClick={() => selectFile(file)}
                     className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition border ${
                       selectedFile?.id === file.id
                         ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300 shadow-sm'
@@ -204,21 +242,51 @@ export default function ViewerModal({
             )}
 
             {/* 3D Canvas Area */}
-            <div className="flex-1 min-h-[380px] lg:min-h-[460px]">
+            <div className="relative flex-1 min-h-[380px] lg:min-h-[460px]">
               {selectedFile ? (
                 <ThreeCanvas
                   fileUrl={`/api/models/files/${selectedFile.id}/raw`}
                   fileType={selectedFile.file_type}
+                  previewIndex={previewIndex}
                   initialColor={model.filament_color || '#38bdf8'}
                   height="100%"
                   onGeometryLoaded={(stats, geom) => {
                     setMeshStats(stats);
                     setCurrentGeometry(geom);
+                    setPreviewOptions(geom.userData?.previewOptions || []);
+                    setPreviewIndex(geom.userData?.activePreviewIndex || 0);
                   }}
                 />
               ) : (
                 <div className="w-full h-full rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-center text-slate-500">
                   Keine STL/3MF Datei zum Anzeigen ausgewählt.
+                </div>
+              )}
+              {(modelFiles.length > 1 || previewOptions.length > 1) && (
+                <div className="pointer-events-none absolute inset-y-0 left-0 right-0 z-20 flex items-center justify-between p-3">
+                  <button
+                    type="button"
+                    onClick={() => selectAdjacentFile(-1)}
+                    aria-label={previewOptions.length > 1 ? 'Vorherige Platte oder Objekt' : 'Vorherige Datei'}
+                    title={previewOptions.length > 1 ? 'Vorherige Platte oder Objekt' : 'Vorherige Datei'}
+                    className="pointer-events-auto grid size-10 place-items-center rounded-full border border-slate-600/80 bg-slate-950/80 text-slate-100 shadow-lg backdrop-blur hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+                  >
+                    <ChevronLeft className="size-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => selectAdjacentFile(1)}
+                    aria-label={previewOptions.length > 1 ? 'Nächste Platte oder Objekt' : 'Nächste Datei'}
+                    title={previewOptions.length > 1 ? 'Nächste Platte oder Objekt' : 'Nächste Datei'}
+                    className="pointer-events-auto grid size-10 place-items-center rounded-full border border-slate-600/80 bg-slate-950/80 text-slate-100 shadow-lg backdrop-blur hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+                  >
+                    <ChevronRight className="size-5" />
+                  </button>
+                </div>
+              )}
+              {previewOptions.length > 1 && previewOptions[previewIndex] && (
+                <div className="pointer-events-none absolute top-3 left-1/2 z-20 -translate-x-1/2 rounded-full border border-slate-600/80 bg-slate-950/80 px-3 py-1 text-xs font-medium text-slate-100 shadow-lg backdrop-blur">
+                  {previewOptions[previewIndex].name}
                 </div>
               )}
             </div>
