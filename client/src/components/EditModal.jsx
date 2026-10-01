@@ -36,6 +36,11 @@ export default function EditModal({ model, onClose, onUpdated }) {
   const [error, setError] = useState(null);
   const extraFileInputRef = useRef(null);
 
+  // File rename state (must be before early return to satisfy Rules of Hooks)
+  const [editingFileId, setEditingFileId] = useState(null);
+  const [editingFileName, setEditingFileName] = useState('');
+  const [renamingFile, setRenamingFile] = useState(false);
+
   if (!model) return null;
 
   const categories = [
@@ -111,10 +116,6 @@ export default function EditModal({ model, onClose, onUpdated }) {
       });
     }
   };
-
-  const [editingFileId, setEditingFileId] = useState(null);
-  const [editingFileName, setEditingFileName] = useState('');
-  const [renamingFile, setRenamingFile] = useState(false);
 
   const startRenameFile = (file) => {
     setEditingFileId(file.id);
