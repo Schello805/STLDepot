@@ -19,7 +19,7 @@ export default function Footer({ systemInfo }) {
   const updateInfo = systemInfo?.update_info;
 
   return (
-    <footer className="mt-20 border-t border-slate-800/80 bg-slate-900/60 backdrop-blur-md text-slate-400 py-10 transition-colors">
+    <footer className="mt-10 sm:mt-20 border-t border-slate-800/80 bg-slate-900/60 backdrop-blur-md text-slate-400 py-6 sm:py-10 mb-16 sm:mb-0 transition-colors">
       <div className="w-[92%] max-w-[2400px] mx-auto px-2 sm:px-4 lg:px-6">
         <div className="flex flex-col md:flex-row items-center justify-between gap-6">
           

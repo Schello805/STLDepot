@@ -747,16 +747,16 @@ export default function App() {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 z-10 w-full md:w-auto">
-            <div className="flex-1 sm:flex-initial p-3.5 sm:p-4 rounded-2xl bg-slate-800/80 border border-slate-700/80 backdrop-blur-md text-center min-w-[105px] shadow-lg hover:border-cyan-500/40 transition">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 sm:gap-3 z-10 w-full md:w-auto">
+            <div className="flex-1 basis-[calc(33%-6px)] sm:flex-initial p-3 sm:p-4 rounded-2xl bg-slate-800/80 border border-slate-700/80 backdrop-blur-md text-center min-w-0 sm:min-w-[105px] shadow-lg hover:border-cyan-500/40 transition">
               <div className="text-2xl sm:text-3xl font-black text-cyan-400 font-mono tracking-tight">{systemInfo?.stats?.total_projects || models.length}</div>
               <div className="text-[10px] sm:text-[11px] font-semibold text-slate-300 uppercase tracking-wider mt-0.5">Modelle</div>
             </div>
-            <div className="flex-1 sm:flex-initial p-3.5 sm:p-4 rounded-2xl bg-slate-800/80 border border-slate-700/80 backdrop-blur-md text-center min-w-[105px] shadow-lg hover:border-cyan-500/40 transition">
+            <div className="flex-1 basis-[calc(33%-6px)] sm:flex-initial p-3 sm:p-4 rounded-2xl bg-slate-800/80 border border-slate-700/80 backdrop-blur-md text-center min-w-0 sm:min-w-[105px] shadow-lg hover:border-cyan-500/40 transition">
               <div className="text-2xl sm:text-3xl font-black text-white font-mono tracking-tight">{categories.length}</div>
               <div className="text-[10px] sm:text-[11px] font-semibold text-slate-300 uppercase tracking-wider mt-0.5">Kategorien</div>
             </div>
-            <div className="flex-1 sm:flex-initial p-3.5 sm:p-4 rounded-2xl bg-slate-800/80 border border-slate-700/80 backdrop-blur-md text-center min-w-[105px] shadow-lg hover:border-cyan-500/40 transition">
+            <div className="flex-1 basis-[calc(33%-6px)] sm:flex-initial p-3 sm:p-4 rounded-2xl bg-slate-800/80 border border-slate-700/80 backdrop-blur-md text-center min-w-0 sm:min-w-[105px] shadow-lg hover:border-cyan-500/40 transition">
               <div className="text-2xl sm:text-3xl font-black text-emerald-400 font-mono tracking-tight">{systemInfo?.stats?.storage_formatted || '0 MB'}</div>
               <div className="text-[10px] sm:text-[11px] font-semibold text-slate-300 uppercase tracking-wider mt-0.5">Speicher</div>
             </div>
@@ -775,7 +775,7 @@ export default function App() {
             {selectedTag && (
               <button
                 onClick={() => setSelectedTag('')}
-                className="px-2.5 py-1 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-semibold shadow-sm"
+                className="px-3 py-2 sm:px-2.5 sm:py-1 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-semibold shadow-sm"
               >
                 ✕ #{selectedTag}
               </button>
@@ -784,7 +784,7 @@ export default function App() {
               <button
                 key={t.id}
                 onClick={() => setSelectedTag(selectedTag === t.name ? '' : t.name)}
-                className={`px-2.5 py-1 rounded-lg transition whitespace-nowrap font-medium ${
+                className={`px-3 py-2 sm:px-2.5 sm:py-1 rounded-lg transition whitespace-nowrap font-medium ${
                   selectedTag === t.name
                     ? 'bg-cyan-500/25 text-cyan-300 border border-cyan-500/50 shadow-sm'
                     : 'bg-slate-800/70 text-slate-300 border border-slate-700/70 hover:text-white hover:bg-slate-750 hover:border-slate-600'
@@ -913,29 +913,29 @@ export default function App() {
 
       {/* FLOATING BATCH ACTIONS TOOLBAR (WHEN MODELS ARE SELECTED) */}
       {selectionMode && selectedIds.length > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-11/12 max-w-2xl bg-slate-900/95 backdrop-blur-xl border border-cyan-500/40 rounded-2xl p-3 sm:p-4 shadow-2xl shadow-cyan-950/60 flex flex-wrap items-center justify-between gap-3 animate-in slide-in-from-bottom-5 duration-200">
+        <div className="fixed bottom-20 sm:bottom-6 left-1/2 -translate-x-1/2 z-40 w-[95%] sm:w-11/12 max-w-2xl bg-slate-900/95 backdrop-blur-xl border border-cyan-500/40 rounded-2xl p-3 sm:p-4 shadow-2xl shadow-cyan-950/60 flex flex-wrap items-center justify-between gap-2 sm:gap-3 animate-in slide-in-from-bottom-5 duration-200">
           <div className="flex items-center gap-2">
             <span className="px-2.5 py-1 rounded-xl bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs font-mono font-bold">
               {selectedIds.length} {selectedIds.length === 1 ? 'Modell' : 'Modelle'}
             </span>
             <button
               onClick={handleSelectAll}
-              className="text-xs text-slate-300 hover:text-white underline font-medium"
+              className="text-xs text-slate-300 hover:text-white underline font-medium hidden sm:inline"
             >
               {selectedIds.length === models.length ? 'Alle abwählen' : 'Alle auswählen'}
             </button>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             {/* Category Dropdown mover */}
             <select
               onChange={(e) => {
                 if (e.target.value) handleBatchMoveCategory(e.target.value);
               }}
               defaultValue=""
-              className="bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-cyan-500 cursor-pointer"
+              className="bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded-xl px-2 sm:px-2.5 py-1.5 focus:outline-none focus:border-cyan-500 cursor-pointer max-w-[120px] sm:max-w-none"
             >
-              <option value="" disabled>📁 Kategorie zuweisen...</option>
+              <option value="" disabled>📁 Kategorie...</option>
               {categories.map((c) => (
                 <option key={c.category} value={c.category}>{c.category}</option>
               ))}
@@ -950,22 +950,22 @@ export default function App() {
             <button
               onClick={handleBatchDownload}
               disabled={isProcessingBatch}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 text-xs font-bold border border-cyan-700/80 transition shadow-sm"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 text-xs font-bold border border-cyan-700/80 transition shadow-sm"
               title="Alle ausgewählten Modelle als gemeinsame ZIP herunterladen"
             >
               <Download className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Sammel-ZIP</span>
+              <span className="hidden sm:inline">Sammel-ZIP</span>
             </button>
 
             {/* Batch Delete */}
             <button
               onClick={handleBatchDelete}
               disabled={isProcessingBatch}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-red-950/80 hover:bg-red-900 text-red-200 text-xs font-bold border border-red-800 transition shadow-sm"
+              className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-xl bg-red-950/80 hover:bg-red-900 text-red-200 text-xs font-bold border border-red-800 transition shadow-sm"
               title="Ausgewählte Modelle löschen"
             >
               <Trash2 className="w-3.5 h-3.5 text-red-400" />
-              <span>Löschen</span>
+              <span className="hidden sm:inline">Löschen</span>
             </button>
 
             {/* Close Selection */}

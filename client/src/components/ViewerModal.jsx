@@ -137,36 +137,36 @@ export default function ViewerModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/80 backdrop-blur-md overscroll-contain animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-1 sm:p-6 bg-slate-950/80 backdrop-blur-md overscroll-contain animate-in fade-in duration-200">
       <div 
-        className="relative w-full max-w-6xl max-h-[92vh] bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col"
+        className="relative w-full max-w-6xl max-h-[100vh] sm:max-h-[92vh] bg-slate-900 border border-slate-800 rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header Bar */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/40">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between px-3 sm:px-6 py-2.5 sm:py-4 border-b border-slate-800 bg-slate-950/40">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
             <div 
-              className="w-4 h-4 rounded-full"
+              className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full shrink-0"
               style={{ backgroundColor: model.filament_color || '#38bdf8' }}
             />
-            <div>
-              <h2 className="text-lg sm:text-xl font-bold text-slate-100 flex items-center gap-2">
-                <span>{model.title}</span>
+            <div className="min-w-0">
+              <h2 className="text-sm sm:text-xl font-bold text-slate-100 flex items-center gap-1.5 sm:gap-2">
+                <span className="truncate">{model.title}</span>
                 <button
                   onClick={() => onToggleFavorite(model)}
-                  className="p-1 rounded-lg hover:bg-slate-800 transition text-slate-400"
+                  className="p-1 rounded-lg hover:bg-slate-800 transition text-slate-400 shrink-0"
                 >
                   <Heart className={`w-4 h-4 ${model.is_favorite ? 'fill-rose-400 text-rose-400' : ''}`} />
                 </button>
               </h2>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-400 hidden sm:block">
                 Kategorie: <span className="text-cyan-400 font-medium">{model.category}</span> • Autor: {model.author || 'Michael Schellenberger'}
               </p>
             </div>
           </div>
 
           {/* Top Actions */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             <button
               onClick={() => onOpenSlicer(model, selectedFile)}
               className="hidden sm:flex items-center gap-2 px-3.5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs shadow-lg transition"
@@ -174,9 +174,17 @@ export default function ViewerModal({
               <Printer className="w-4 h-4" />
               <span>In Slicer öffnen</span>
             </button>
+            {/* Mobile: Slicer icon button */}
+            <button
+              onClick={() => onOpenSlicer(model, selectedFile)}
+              className="sm:hidden p-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-slate-950 transition"
+              title="In Slicer öffnen"
+            >
+              <Printer className="w-4 h-4" />
+            </button>
             <button
               onClick={() => setShowLabelModal(true)}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition"
+              className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition"
               title="Druckfertiges Werkstatt-Etikett mit QR-Code für Boxen & Spulen generieren"
             >
               <QrCode className="w-4 h-4 text-cyan-400" />
@@ -184,29 +192,37 @@ export default function ViewerModal({
             </button>
             <button
               onClick={handleDownloadZip}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 text-xs font-semibold border border-slate-700 transition"
+              className="hidden sm:flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 text-xs font-semibold border border-slate-700 transition"
               title="Alle Dateien als ZIP herunterladen"
             >
               <Download className="w-4 h-4 text-cyan-400" />
               <span>ZIP Download</span>
             </button>
+            {/* Mobile: Download icon */}
+            <button
+              onClick={handleDownloadZip}
+              className="sm:hidden p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+              title="Alle Dateien als ZIP herunterladen"
+            >
+              <Download className="w-4 h-4 text-cyan-400" />
+            </button>
             <button
               onClick={() => onEdit(model)}
-              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition hidden sm:block"
               title="Projekt bearbeiten"
             >
               <Edit3 className="w-4 h-4" />
             </button>
             <button
               onClick={() => onDelete(model)}
-              className="p-2 rounded-xl bg-slate-800 hover:bg-red-950 hover:text-red-400 text-slate-400 transition"
+              className="p-2 rounded-xl bg-slate-800 hover:bg-red-950 hover:text-red-400 text-slate-400 transition hidden sm:block"
               title="Projekt löschen"
             >
               <Trash2 className="w-4 h-4" />
             </button>
             <button
               onClick={onClose}
-              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition ml-2"
+              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition sm:ml-2"
             >
               <X className="w-5 h-5" />
             </button>
@@ -217,7 +233,7 @@ export default function ViewerModal({
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-0 overflow-y-auto">
           
           {/* Left / Center 3D Viewport & Part Selector */}
-          <div className="lg:col-span-8 p-4 sm:p-6 flex flex-col gap-4 bg-slate-950/30 border-r border-slate-800/80">
+          <div className="lg:col-span-8 p-3 sm:p-6 flex flex-col gap-3 sm:gap-4 bg-slate-950/30 border-r border-slate-800/80">
             
             {/* Multi-part tabs if more than 1 3D model */}
             {modelFiles.length > 1 && (
@@ -242,7 +258,7 @@ export default function ViewerModal({
             )}
 
             {/* 3D Canvas Area */}
-            <div className="relative flex-1 min-h-[380px] lg:min-h-[460px]">
+            <div className="relative flex-1 min-h-[260px] sm:min-h-[380px] lg:min-h-[460px]">
               {selectedFile ? (
                 <ThreeCanvas
                   fileUrl={`/api/models/files/${selectedFile.id}/raw`}

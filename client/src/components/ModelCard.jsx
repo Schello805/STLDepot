@@ -130,7 +130,7 @@ export default function ModelCard({
             <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {model.print_time || '--:--'}</span>
           </div>
         </div>
-        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity px-2">
+        <div className="flex items-center gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity px-2">
           <button onClick={(e) => { e.stopPropagation(); onOpenSlicer(model); }} className="p-2 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 rounded-lg">
             <Printer className="w-4 h-4" />
           </button>
@@ -248,6 +248,35 @@ export default function ModelCard({
         {/* Floating Quick Action Overlay on Hover (Hidden in selection mode) */}
         {!selectionMode && (
           <div className={`absolute inset-0 bg-slate-950/50 backdrop-blur-[2px] flex items-center justify-center gap-2.5 transition-opacity duration-200 z-10 ${isHovered ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+            {/* Mobile: Always-visible compact action bar at bottom */}
+          </div>
+        )}
+        {!selectionMode && (
+          <div className="sm:hidden absolute bottom-0 left-0 right-0 z-10 flex items-center justify-center gap-2 p-2 bg-gradient-to-t from-slate-950/90 via-slate-950/60 to-transparent">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenViewer(model);
+              }}
+              className="flex items-center gap-1 px-3 py-2 rounded-xl bg-cyan-500/90 text-slate-950 font-bold text-[11px] shadow-lg transition active:scale-95"
+            >
+              <Maximize2 className="w-3 h-3" />
+              3D
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenSlicer(model);
+              }}
+              className="flex items-center gap-1 px-3 py-2 rounded-xl bg-slate-800/90 text-white font-semibold text-[11px] border border-slate-600 shadow-lg transition active:scale-95"
+            >
+              <Printer className="w-3 h-3 text-cyan-400" />
+              Slicer
+            </button>
+          </div>
+        )}
+        {!selectionMode && (
+          <div className={`hidden sm:flex absolute inset-0 bg-slate-950/50 backdrop-blur-[2px] items-center justify-center gap-2.5 transition-opacity duration-200 z-10 ${isHovered ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -285,7 +314,7 @@ export default function ModelCard({
         </div>
 
         {/* 3 Infos: Material, Gewicht, Preis (ohne Icons, kein Zeilenumbruch) */}
-        <div className="flex items-center gap-1.5 text-[11px] text-slate-200 font-mono flex-nowrap overflow-hidden">
+        <div className="flex items-center gap-1.5 text-[11px] text-slate-200 font-mono flex-wrap">
           {/* 1. Material */}
           <span 
             className="px-2 py-0.5 rounded-md bg-slate-800/90 border border-slate-700 text-slate-200 font-semibold shadow-sm shrink-0"
@@ -339,7 +368,7 @@ export default function ModelCard({
         {model.tags && model.tags.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {model.tags.slice(0, 3).map((tag, idx) => (
-              <span key={idx} className="text-[10px] text-slate-300 bg-slate-800 px-2 py-0.5 rounded-md border border-slate-700/80 font-medium">
+              <span key={idx} className="text-[10px] text-slate-300 bg-slate-800 px-2.5 py-1 sm:px-2 sm:py-0.5 rounded-md border border-slate-700/80 font-medium">
                 #{tag}
               </span>
             ))}
@@ -363,7 +392,7 @@ export default function ModelCard({
                 e.stopPropagation();
                 onEdit(model);
               }}
-              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-750 transition shadow-sm"
+              className="p-2 sm:p-1.5 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-750 transition shadow-sm"
               title="Bearbeiten"
             >
               <MoreVertical className="w-3.5 h-3.5" />
@@ -373,7 +402,7 @@ export default function ModelCard({
                 e.stopPropagation();
                 onDelete(model);
               }}
-              className="p-1.5 rounded-lg bg-slate-800 hover:bg-red-950 text-slate-400 hover:text-red-400 border border-slate-750 transition shadow-sm"
+              className="p-2 sm:p-1.5 rounded-lg bg-slate-800 hover:bg-red-950 text-slate-400 hover:text-red-400 border border-slate-750 transition shadow-sm"
               title="Löschen"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -381,7 +410,7 @@ export default function ModelCard({
             <button
               onClick={handleDownload}
               disabled={downloading}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-100 font-semibold border border-slate-750 hover:border-cyan-500/40 shadow-sm transition active:scale-95 disabled:opacity-50"
+              className="flex items-center gap-1 px-3 py-2 sm:px-2.5 sm:py-1.5 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-100 font-semibold border border-slate-750 hover:border-cyan-500/40 shadow-sm transition active:scale-95 disabled:opacity-50"
               title="Projekt als ZIP herunterladen"
             >
               <Download className={`w-3.5 h-3.5 text-cyan-400 ${downloading ? 'animate-bounce' : ''}`} />
