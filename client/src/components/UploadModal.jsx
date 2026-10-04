@@ -38,6 +38,18 @@ import confetti from 'canvas-confetti';
 export default function UploadModal({ onClose, onUploadSuccess }) {
   const [files, setFiles] = useState([]);
   const [uploadMode, setUploadMode] = useState('single'); // 'single', 'batch', 'assembly'
+
+  useEffect(() => {
+    const bodyOverflow = document.body.style.overflow;
+    const documentOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = bodyOverflow;
+      document.documentElement.style.overflow = documentOverflow;
+    };
+  }, []);
   
   // Basic metadata
   const [title, setTitle] = useState('');
