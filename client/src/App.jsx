@@ -293,25 +293,45 @@ export default function App() {
     return models.slice(0, visibleCount);
   }, [models, visibleCount]);
 
-  // IntersectionObserver for progressive infinite scroll
+  const loadMoreModels = useCallback(() => {
+    setVisibleCount((previous) => (
+      previous < models.length ? Math.min(previous + BATCH_INCREMENT, models.length) : previous
+    ));
+  }, [models.length]);
+
+  // IntersectionObserver for progressive infinite scroll, with a viewport fallback
+  // for browsers that do not notify when the sentinel is already on screen.
   useEffect(() => {
     const sentinel = sentinelRef.current;
     if (!sentinel) return;
 
-    const observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting) {
-        setVisibleCount((prev) => {
-          if (prev < models.length) {
-            return Math.min(prev + BATCH_INCREMENT, models.length);
-          }
-          return prev;
-        });
+    const checkSentinelPosition = () => {
+      const bounds = sentinel.getBoundingClientRect();
+      const preloadDistance = 350;
+      if (bounds.top <= window.innerHeight + preloadDistance && bounds.bottom >= -preloadDistance) {
+        loadMoreModels();
       }
-    }, { rootMargin: '350px' });
+    };
 
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [models.length, visibleCount]);
+    let observer;
+    if ('IntersectionObserver' in window) {
+      observer = new IntersectionObserver((entries) => {
+        if (entries.some(entry => entry.isIntersecting)) checkSentinelPosition();
+      }, { rootMargin: '350px 0px', threshold: 0 });
+      observer.observe(sentinel);
+    }
+
+    window.addEventListener('scroll', checkSentinelPosition, { passive: true });
+    window.addEventListener('resize', checkSentinelPosition);
+    const frameId = window.requestAnimationFrame(checkSentinelPosition);
+
+    return () => {
+      observer?.disconnect();
+      window.cancelAnimationFrame(frameId);
+      window.removeEventListener('scroll', checkSentinelPosition);
+      window.removeEventListener('resize', checkSentinelPosition);
+    };
+  }, [loadMoreModels, visibleCount]);
 
   // Concurrent Background Folder Upload Runner (4 parallel workers) with Duplicate Detection
   const startFolderUpload = useCallback(async ({ items, isPreserve, folderName, duplicateAction = 'skip' }) => {
