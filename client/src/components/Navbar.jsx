@@ -38,7 +38,8 @@ export default function Navbar({
   selectedFilament = 'Alle',
   setSelectedFilament,
   selectedPrintTime = 'Alle',
-  setSelectedPrintTime
+  setSelectedPrintTime,
+  onHome
 }) {
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const hasActiveFilters = selectedFilament !== 'Alle' || selectedPrintTime !== 'Alle' || sortBy !== 'newest';
@@ -50,7 +51,12 @@ export default function Navbar({
         <div className="flex items-center justify-between h-14 sm:h-20 gap-2 sm:gap-4">
           
           {/* Brand Logo & Title */}
-          <div className="flex items-center gap-2 sm:gap-3 cursor-pointer select-none shrink-0" onClick={() => { setSearchQuery(''); setSelectedCategory('Alle'); setOnlyFavorites(false); }}>
+          <button
+            type="button"
+            className="flex items-center gap-2 sm:gap-3 cursor-pointer select-none shrink-0 text-left"
+            onClick={onHome}
+            title="Zur Startseite"
+          >
             <div className="relative flex items-center justify-center w-9 h-9 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-tr from-cyan-500/30 via-slate-800 to-amber-500/30 p-0.5 shadow-lg shadow-cyan-500/20 group overflow-hidden">
               <img 
                 src="/logo.png" 
@@ -71,7 +77,7 @@ export default function Navbar({
                 3D-Druck Modell-Katalog & Slicer Vault
               </p>
             </div>
-          </div>
+          </button>
 
           {/* Live Search Bar – Desktop Only (Mobile search is below) */}
           <div className="flex-1 max-w-xl mx-2 sm:mx-4 hidden sm:block">

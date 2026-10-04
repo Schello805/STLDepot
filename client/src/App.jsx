@@ -706,6 +706,20 @@ export default function App() {
     [models, selectedIds]
   );
 
+  const handleGoHome = useCallback(() => {
+    setSearchQuery('');
+    setSelectedCategory('Alle');
+    setSelectedTag('');
+    setSelectedFilament('Alle');
+    setSelectedPrintTime('Alle');
+    setOnlyFavorites(false);
+    setSortBy('newest');
+    setSelectionMode(false);
+    setSelectedIds([]);
+    setVisibleCount(INITIAL_BATCH);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
   return (
     <div 
       className="min-h-screen bg-slate-950/20 text-slate-100 flex flex-col bg-grid-pattern selection:bg-cyan-500 selection:text-slate-950 pb-20"
@@ -755,6 +769,7 @@ export default function App() {
         setSelectedFilament={setSelectedFilament}
         selectedPrintTime={selectedPrintTime}
         setSelectedPrintTime={setSelectedPrintTime}
+        onHome={handleGoHome}
       />
 
       {/* Main Container - 92% Width for Modern Widescreen */}
@@ -1124,7 +1139,7 @@ export default function App() {
 
       {/* Footer with Dynamic Rev & Open Source info */}
       <BottomNav 
-        onHome={() => { setSearchQuery(''); setSelectedCategory('Alle'); setOnlyFavorites(false); window.scrollTo(0,0); }}
+        onHome={handleGoHome}
         onUpload={() => setIsUploadOpen(true)}
         onScan={() => setIsScannerOpen(true)}
         onSettings={() => setIsSettingsOpen(true)}
