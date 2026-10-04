@@ -22,7 +22,8 @@ import {
   FolderInput,
   X,
   Check,
-  Download
+  Download,
+  Replace
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useDialog } from './context/DialogContext';
@@ -46,6 +47,7 @@ const EditModal = safeLazy(() => import('./components/EditModal'));
 const SlicerModal = safeLazy(() => import('./components/SlicerModal'));
 const ScanModal = safeLazy(() => import('./components/ScanModal'));
 const SettingsModal = safeLazy(() => import('./components/SettingsModal'));
+const BatchRenameModal = safeLazy(() => import('./components/BatchRenameModal'));
 
 
 export default function App() {
@@ -96,6 +98,7 @@ export default function App() {
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isBatchRenameOpen, setIsBatchRenameOpen] = useState(false);
 
   // Material & Pricing Settings
   const [materialSettings, setMaterialSettings] = useState({
@@ -678,6 +681,11 @@ export default function App() {
     }
   };
 
+  const selectedModels = useMemo(
+    () => models.filter(model => selectedIds.includes(model.id)),
+    [models, selectedIds]
+  );
+
   return (
     <div 
       className="min-h-screen bg-slate-950/20 text-slate-100 flex flex-col bg-grid-pattern selection:bg-cyan-500 selection:text-slate-950 pb-20"
@@ -946,6 +954,16 @@ export default function App() {
               <option value="Gaming & Tabletop">Gaming & Tabletop</option>
             </select>
 
+            <button
+              onClick={() => setIsBatchRenameOpen(true)}
+              disabled={isProcessingBatch}
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-violet-950/80 hover:bg-violet-900 text-violet-200 text-xs font-bold border border-violet-700/80 transition shadow-sm disabled:opacity-50"
+              title="Ausgewählte Modellnamen suchen und ersetzen"
+            >
+              <Replace className="w-3.5 h-3.5 text-violet-300" />
+              <span className="hidden sm:inline">Umbenennen</span>
+            </button>
+
             {/* Batch Download ZIP */}
             <button
               onClick={handleBatchDownload}
@@ -1066,6 +1084,20 @@ export default function App() {
             materialSettings={materialSettings}
             onSaveSettings={handleSaveSettings}
             onRecalculateWeights={handleRecalculateWeights}
+          />
+        )}
+        {isBatchRenameOpen && (
+          <BatchRenameModal
+            models={selectedModels}
+            onClose={() => setIsBatchRenameOpen(false)}
+            onCompleted={async (changedCount) => {
+              await Promise.all([fetchModels(), fetchMetadata(), fetchSystemInfo()]);
+              await alert({
+                title: 'Namen aktualisiert',
+                message: `${changedCount} ${changedCount === 1 ? 'Modellname wurde' : 'Modellnamen wurden'} geändert.`,
+                type: 'success'
+              });
+            }}
           />
         )}
       </Suspense>

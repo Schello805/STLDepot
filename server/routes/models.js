@@ -943,6 +943,50 @@ router.post('/batch-category', (req, res) => {
   }
 });
 
+// POST /api/models/batch-rename - Apply ordered literal search-and-replace rules to project titles
+router.post('/batch-rename', (req, res) => {
+  try {
+    const { ids, rules } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0 || !Array.isArray(rules) || rules.length === 0) {
+      return res.status(400).json({ success: false, error: 'Modelle und mindestens eine Ersetzungsregel sind erforderlich.' });
+    }
+
+    const validRules = rules
+      .filter(rule => rule && typeof rule.find === 'string' && rule.find.length > 0 && typeof rule.replace === 'string')
+      .slice(0, 25);
+
+    if (validRules.length === 0) {
+      return res.status(400).json({ success: false, error: 'Die Suchbegriffe dürfen nicht leer sein.' });
+    }
+
+    const placeholders = ids.map(() => '?').join(',');
+    const projects = db.prepare(`SELECT id, title FROM projects WHERE id IN (${placeholders})`).all(...ids);
+    const updateTitle = db.prepare('UPDATE projects SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+    const changed = [];
+
+    const applyRules = (title) => validRules.reduce(
+      (result, rule) => result.split(rule.find).join(rule.replace),
+      title
+    ).replace(/\s{2,}/g, ' ').trim();
+
+    const transaction = db.transaction(() => {
+      for (const project of projects) {
+        const nextTitle = applyRules(project.title || '');
+        if (nextTitle && nextTitle !== project.title) {
+          updateTitle.run(nextTitle, project.id);
+          changed.push({ id: project.id, oldTitle: project.title, title: nextTitle });
+        }
+      }
+    });
+
+    transaction();
+    res.json({ success: true, changedCount: changed.length, changed });
+  } catch (err) {
+    console.error('Batch rename failed:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // POST /api/models/batch-download - Download multiple selected models as a single ZIP archive
 router.post('/batch-download', (req, res) => {
   try {
