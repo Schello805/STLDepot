@@ -33,11 +33,12 @@ import {
   generateThumbnailSnapshot 
 } from '../utils/threeUtils';
 import { formatTitleFromFilename } from '../utils/formatUtils';
+import { readDroppedFiles } from '../utils/dropFiles';
 import confetti from 'canvas-confetti';
 
-export default function UploadModal({ onClose, onUploadSuccess }) {
-  const [files, setFiles] = useState([]);
-  const [uploadMode, setUploadMode] = useState('single'); // 'single', 'batch', 'assembly'
+export default function UploadModal({ onClose, onUploadSuccess, initialFiles = [] }) {
+  const [files, setFiles] = useState(initialFiles);
+  const [uploadMode, setUploadMode] = useState(initialFiles.length > 1 ? 'batch' : 'single'); // 'single', 'batch', 'assembly'
 
   useEffect(() => {
     const bodyOverflow = document.body.style.overflow;
@@ -52,7 +53,7 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
   }, []);
   
   // Basic metadata
-  const [title, setTitle] = useState('');
+  const [title, setTitle] = useState(initialFiles[0] ? formatTitleFromFilename(initialFiles[0].name) : '');
   const [category, setCategory] = useState('Deko & Haushalt');
   const [author, setAuthor] = useState('');
   
@@ -838,9 +839,14 @@ export default function UploadModal({ onClose, onUploadSuccess }) {
             <div
               onClick={() => fileInputRef.current?.click()}
               onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
+              onDrop={async (e) => {
                 e.preventDefault();
-                handleFileChange(e.dataTransfer.files);
+                e.stopPropagation();
+                try {
+                  await handleFileChange(await readDroppedFiles(e.dataTransfer));
+                } catch (dropError) {
+                  setError(`Ordner konnte nicht gelesen werden: ${dropError.message}`);
+                }
               }}
               className="border-2 border-dashed border-cyan-500/40 hover:border-cyan-400 rounded-2xl p-8 sm:p-10 flex flex-col items-center justify-center cursor-pointer bg-slate-950/60 hover:bg-slate-950/80 transition-all text-center group shadow-inner"
             >

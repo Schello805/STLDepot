@@ -28,6 +28,7 @@ import {
 import confetti from 'canvas-confetti';
 import { useDialog } from './context/DialogContext';
 import { formatTitleFromFilename } from './utils/formatUtils';
+import { readDroppedFiles } from './utils/dropFiles';
 
 // Helper to auto-reload if dynamic chunk loading fails due to app update
 const safeLazy = (importFn) => lazy(async () => {
@@ -495,11 +496,22 @@ export default function App() {
     }
   };
 
-  const handleDrop = (e) => {
+  const handleDrop = async (e) => {
     e.preventDefault();
+    e.stopPropagation();
     dragCounterRef.current = 0;
     setIsWindowDragOver(false);
-    setIsUploadOpen(true);
+    try {
+      const files = await readDroppedFiles(e.dataTransfer);
+      if (files.length) {
+        setDroppedFiles(files);
+        setIsUploadOpen(true);
+      } else {
+        await alert({ title: 'Keine passenden Dateien', message: 'Der Ordner enthält keine unterstützten Modelldateien oder Bilder.', type: 'warning' });
+      }
+    } catch (error) {
+      await alert({ title: 'Ordner konnte nicht gelesen werden', message: error.message, type: 'error' });
+    }
   };
 
   const handleToggleFavorite = async (model) => {
