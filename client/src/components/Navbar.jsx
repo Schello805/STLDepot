@@ -16,7 +16,8 @@ import {
   List,
   Monitor,
   Filter,
-  X
+  X,
+  CheckSquare
 } from 'lucide-react';
 
 export default function Navbar({ 
@@ -39,10 +40,21 @@ export default function Navbar({
   setSelectedFilament,
   selectedPrintTime = 'Alle',
   setSelectedPrintTime,
-  onHome
+  selectedMulticolor = 'Alle',
+  setSelectedMulticolor,
+  selectedSupports = 'Alle',
+  setSelectedSupports,
+  onHome,
+  tags = [],
+  selectedTag = '',
+  setSelectedTag = () => {},
+  selectionMode = false,
+  setSelectionMode = () => {},
+  setSelectedIds = () => {},
+  modelsCount = 0
 }) {
   const [showMobileFilters, setShowMobileFilters] = useState(false);
-  const hasActiveFilters = selectedFilament !== 'Alle' || selectedPrintTime !== 'Alle' || sortBy !== 'newest';
+  const hasActiveFilters = selectedFilament !== 'Alle' || selectedPrintTime !== 'Alle' || selectedMulticolor !== 'Alle' || selectedSupports !== 'Alle' || sortBy !== 'newest';
 
   return (
     <header className="sticky top-0 z-40 w-full backdrop-blur-2xl bg-slate-900/90 border-b border-slate-700/70 shadow-lg shadow-black/20 transition-colors">
@@ -315,6 +327,34 @@ export default function Navbar({
               </select>
             )}
 
+            {/* Multicolor Filter */}
+            {setSelectedMulticolor && (
+              <select
+                value={selectedMulticolor}
+                onChange={(e) => setSelectedMulticolor(e.target.value)}
+                className="hidden sm:block bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-lg px-2.5 py-1 focus:outline-none focus:border-cyan-500 transition cursor-pointer"
+                title="Nach Mehrfarbigkeit filtern"
+              >
+                <option value="Alle">Mehrfarbig: Alle</option>
+                <option value="Ja">Ja</option>
+                <option value="Nein">Nein</option>
+              </select>
+            )}
+
+            {/* Supports Filter */}
+            {setSelectedSupports && (
+              <select
+                value={selectedSupports}
+                onChange={(e) => setSelectedSupports(e.target.value)}
+                className="hidden sm:block bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-lg px-2.5 py-1 focus:outline-none focus:border-cyan-500 transition cursor-pointer"
+                title="Nach Stützstruktur filtern"
+              >
+                <option value="Alle">Stützen: Alle</option>
+                <option value="Ja">Ja</option>
+                <option value="Nein">Nein</option>
+              </select>
+            )}
+
             {/* Sort Selector */}
             <span className="text-[11px] font-medium hidden md:inline ml-1">Sortierung:</span>
             <select
@@ -331,6 +371,53 @@ export default function Navbar({
               <option value="weight_desc">Gewicht (Schwerste)</option>
             </select>
           </div>
+        </div>
+
+        {/* Toolbar Bar: Tags & Selection Mode Toggle */}
+        <div className="py-2 sm:py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs border-t border-slate-800/60">
+          {/* Tags */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar flex-1">
+            <span className="text-slate-400 font-medium whitespace-nowrap">Tags:</span>
+            {selectedTag && (
+              <button
+                onClick={() => setSelectedTag('')}
+                className="px-3 py-2 sm:px-2.5 sm:py-1 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-semibold shadow-sm"
+              >
+                ✕ #{selectedTag}
+              </button>
+            )}
+            {tags.slice(0, 10).map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setSelectedTag(selectedTag === t.name ? '' : t.name)}
+                className={`px-3 py-2 sm:px-2.5 sm:py-1 rounded-lg transition whitespace-nowrap font-medium ${
+                  selectedTag === t.name
+                    ? 'bg-cyan-500/25 text-cyan-300 border border-cyan-500/50 shadow-sm'
+                    : 'bg-slate-800/70 text-slate-300 border border-slate-700/70 hover:text-white hover:bg-slate-750 hover:border-slate-600'
+                }`}
+              >
+                #{t.name} <span className="text-[10px] text-slate-400 font-mono">({t.count})</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Selection Mode Button */}
+          {modelsCount > 0 && (
+            <button
+              onClick={() => {
+                setSelectionMode(!selectionMode);
+                if (selectionMode) setSelectedIds([]);
+              }}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border text-xs font-semibold transition ${
+                selectionMode 
+                  ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-lg shadow-cyan-500/20 font-bold' 
+                  : 'bg-slate-800/80 border-slate-700 text-slate-200 hover:text-white hover:bg-slate-700 hover:border-slate-600 shadow-sm'
+              }`}
+            >
+              <CheckSquare className="w-3.5 h-3.5" />
+              <span>{selectionMode ? 'Auswahl beenden' : 'Auswahl-Modus'}</span>
+            </button>
+          )}
         </div>
 
         {/* Mobile Filter Drawer (expanded below filter pills) */}
@@ -372,6 +459,28 @@ export default function Navbar({
                   <option value="long">&gt; 6 Std.</option>
                 </select>
               )}
+              {setSelectedMulticolor && (
+                <select
+                  value={selectedMulticolor}
+                  onChange={(e) => setSelectedMulticolor(e.target.value)}
+                  className="bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-cyan-500 transition cursor-pointer"
+                >
+                  <option value="Alle">Mehrfarbig: Alle</option>
+                  <option value="Ja">Ja</option>
+                  <option value="Nein">Nein</option>
+                </select>
+              )}
+              {setSelectedSupports && (
+                <select
+                  value={selectedSupports}
+                  onChange={(e) => setSelectedSupports(e.target.value)}
+                  className="bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-cyan-500 transition cursor-pointer"
+                >
+                  <option value="Alle">Stützen: Alle</option>
+                  <option value="Ja">Ja</option>
+                  <option value="Nein">Nein</option>
+                </select>
+              )}
             </div>
             <select
               value={sortBy}
@@ -391,6 +500,8 @@ export default function Navbar({
                 onClick={() => {
                   setSelectedFilament('Alle');
                   setSelectedPrintTime('Alle');
+                  setSelectedMulticolor('Alle');
+                  setSelectedSupports('Alle');
                   setSortBy('newest');
                   setShowMobileFilters(false);
                 }}

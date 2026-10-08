@@ -30,7 +30,7 @@ const upload = multer({
 // GET /api/models - List models with search, category, tag, and sort filters
 router.get('/', (req, res) => {
   try {
-    const { search, category, tag, sort = 'newest', favorite, filament, printTime } = req.query;
+    const { search, category, tag, sort = 'newest', favorite, filament, printTime, multicolor, supports } = req.query;
 
     let query = `
       SELECT 
@@ -78,6 +78,18 @@ router.get('/', (req, res) => {
       query += ` AND p.print_time_minutes > 120 AND p.print_time_minutes <= 360`;
     } else if (printTime === 'long') {
       query += ` AND p.print_time_minutes > 360`;
+    }
+
+    if (multicolor === 'true') {
+      query += ` AND p.is_multicolor = 1`;
+    } else if (multicolor === 'false') {
+      query += ` AND p.is_multicolor = 0`;
+    }
+
+    if (supports === 'true') {
+      query += ` AND p.supports_needed = 1`;
+    } else if (supports === 'false') {
+      query += ` AND p.supports_needed = 0`;
     }
 
     query += ` GROUP BY p.id`;

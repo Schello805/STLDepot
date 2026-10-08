@@ -80,6 +80,8 @@ export default function App() {
   const [selectedTag, setSelectedTag] = useState('');
   const [selectedFilament, setSelectedFilament] = useState('Alle');
   const [selectedPrintTime, setSelectedPrintTime] = useState('Alle');
+  const [selectedMulticolor, setSelectedMulticolor] = useState('Alle');
+  const [selectedSupports, setSelectedSupports] = useState('Alle');
   const [onlyFavorites, setOnlyFavorites] = useState(false);
   const [sortBy, setSortBy] = useState('newest');
   const [globalDragActive, setGlobalDragActive] = useState(false);
@@ -218,6 +220,8 @@ export default function App() {
       if (selectedTag) params.append('tag', selectedTag);
       if (selectedFilament && selectedFilament !== 'Alle') params.append('filament', selectedFilament);
       if (selectedPrintTime && selectedPrintTime !== 'Alle') params.append('printTime', selectedPrintTime);
+      if (selectedMulticolor && selectedMulticolor !== 'Alle') params.append('multicolor', selectedMulticolor === 'Ja' ? 'true' : 'false');
+      if (selectedSupports && selectedSupports !== 'Alle') params.append('supports', selectedSupports === 'Ja' ? 'true' : 'false');
       if (onlyFavorites) params.append('favorite', 'true');
       if (sortBy) params.append('sort', sortBy);
 
@@ -231,7 +235,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, selectedCategory, selectedTag, selectedFilament, selectedPrintTime, onlyFavorites, sortBy]);
+  }, [searchQuery, selectedCategory, selectedTag, selectedFilament, selectedPrintTime, selectedMulticolor, selectedSupports, onlyFavorites, sortBy]);
 
   // Fetch Material Pricing Settings
   const fetchSettings = useCallback(async () => {
@@ -781,7 +785,18 @@ export default function App() {
         setSelectedFilament={setSelectedFilament}
         selectedPrintTime={selectedPrintTime}
         setSelectedPrintTime={setSelectedPrintTime}
+        selectedMulticolor={selectedMulticolor}
+        setSelectedMulticolor={setSelectedMulticolor}
+        selectedSupports={selectedSupports}
+        setSelectedSupports={setSelectedSupports}
         onHome={handleGoHome}
+        tags={tags}
+        selectedTag={selectedTag}
+        setSelectedTag={setSelectedTag}
+        selectionMode={selectionMode}
+        setSelectionMode={setSelectionMode}
+        setSelectedIds={setSelectedIds}
+        modelsCount={models.length}
       />
 
       {/* Main Container - 92% Width for Modern Widescreen */}
@@ -822,52 +837,7 @@ export default function App() {
           <div className="absolute -left-16 -bottom-16 w-80 h-80 bg-indigo-500/15 rounded-full blur-3xl pointer-events-none" />
         </div>
 
-        {/* Toolbar Bar: Tags & Selection Mode Toggle */}
-        <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
-          {/* Tags */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar flex-1">
-            <span className="text-slate-400 font-medium whitespace-nowrap">Tags:</span>
-            {selectedTag && (
-              <button
-                onClick={() => setSelectedTag('')}
-                className="px-3 py-2 sm:px-2.5 sm:py-1 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-semibold shadow-sm"
-              >
-                ✕ #{selectedTag}
-              </button>
-            )}
-            {tags.slice(0, 10).map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setSelectedTag(selectedTag === t.name ? '' : t.name)}
-                className={`px-3 py-2 sm:px-2.5 sm:py-1 rounded-lg transition whitespace-nowrap font-medium ${
-                  selectedTag === t.name
-                    ? 'bg-cyan-500/25 text-cyan-300 border border-cyan-500/50 shadow-sm'
-                    : 'bg-slate-800/70 text-slate-300 border border-slate-700/70 hover:text-white hover:bg-slate-750 hover:border-slate-600'
-                }`}
-              >
-                #{t.name} <span className="text-[10px] text-slate-400 font-mono">({t.count})</span>
-              </button>
-            ))}
-          </div>
-
-          {/* Selection Mode Button */}
-          {models.length > 0 && (
-            <button
-              onClick={() => {
-                setSelectionMode(!selectionMode);
-                if (selectionMode) setSelectedIds([]);
-              }}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border text-xs font-semibold transition ${
-                selectionMode 
-                  ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-lg shadow-cyan-500/20 font-bold' 
-                  : 'bg-slate-800/80 border-slate-700 text-slate-200 hover:text-white hover:bg-slate-700 hover:border-slate-600 shadow-sm'
-              }`}
-            >
-              <CheckSquare className="w-3.5 h-3.5" />
-              <span>{selectionMode ? 'Auswahl beenden' : 'Auswahl-Modus'}</span>
-            </button>
-          )}
-        </div>
+        {/* Hero Banner with Quick Stats */}
 
         {/* Model Catalog Grid - Responsive Wide Grid */}
         {loading ? (
