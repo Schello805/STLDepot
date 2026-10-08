@@ -613,13 +613,13 @@ export default function UploadModal({ onClose, onUploadSuccess, initialFiles = [
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
       <div 
-        className="relative w-full max-w-3xl max-h-[92vh] bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col"
+        className="relative w-full max-w-3xl max-h-[calc(100dvh-1rem)] bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/50">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-slate-950/50">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-2xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
               <UploadCloud className="w-5 h-5" />
@@ -638,11 +638,11 @@ export default function UploadModal({ onClose, onUploadSuccess, initialFiles = [
         </div>
 
         {/* Source Switcher Tabs */}
-        <div className="flex border-b border-slate-800 bg-slate-950/40 px-6 pt-3 gap-2">
+        <div className="flex border-b border-slate-800 bg-slate-950/40 px-4 pt-2 gap-1">
           <button
             type="button"
             onClick={() => { setActiveSourceTab('file'); setError(null); }}
-            className={`flex items-center gap-2 pb-3 px-3 text-xs font-bold border-b-2 transition ${
+            className={`flex items-center gap-2 pb-2 px-2 text-xs font-bold border-b-2 transition ${
               activeSourceTab === 'file'
                 ? 'border-cyan-400 text-cyan-400'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -654,7 +654,7 @@ export default function UploadModal({ onClose, onUploadSuccess, initialFiles = [
           <button
             type="button"
             onClick={() => { setActiveSourceTab('web'); setError(null); }}
-            className={`flex items-center gap-2 pb-3 px-3 text-xs font-bold border-b-2 transition ${
+            className={`flex items-center gap-2 pb-2 px-2 text-xs font-bold border-b-2 transition ${
               activeSourceTab === 'web'
                 ? 'border-cyan-400 text-cyan-400'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -668,7 +668,7 @@ export default function UploadModal({ onClose, onUploadSuccess, initialFiles = [
 
         {/* TAB 2: WEB IMPORTER */}
         {activeSourceTab === 'web' ? (
-          <form onSubmit={handleWebImport} className="flex-1 overflow-y-auto p-6 space-y-6">
+          <form onSubmit={handleWebImport} className="flex-1 overflow-y-auto p-4 space-y-4">
             {error && (
               <div className="p-3.5 rounded-xl bg-red-950/80 border border-red-800 text-red-200 text-xs flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
@@ -676,7 +676,7 @@ export default function UploadModal({ onClose, onUploadSuccess, initialFiles = [
               </div>
             )}
 
-            <div className="p-5 rounded-2xl bg-gradient-to-br from-cyan-950/40 via-slate-950 to-slate-900 border border-cyan-500/20 space-y-3">
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-cyan-950/40 via-slate-950 to-slate-900 border border-cyan-500/20 space-y-2">
               <div className="flex items-center gap-2.5 text-cyan-400 font-bold text-sm">
                 <Globe className="w-4 h-4" />
                 <span>Direkt von Plattformen oder per 3D-Link importieren</span>
@@ -698,7 +698,7 @@ export default function UploadModal({ onClose, onUploadSuccess, initialFiles = [
                   value={webUrl}
                   onChange={(e) => setWebUrl(e.target.value)}
                   placeholder="https://makerworld.com/de/models/... oder https://example.com/model.stl"
-                  className="w-full pl-10 pr-4 py-3 bg-slate-950/80 border border-slate-700 focus:border-cyan-500 rounded-2xl text-xs text-slate-100 placeholder-slate-600 focus:outline-none transition shadow-inner font-mono"
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-950/80 border border-slate-700 focus:border-cyan-500 rounded-2xl text-xs text-slate-100 placeholder-slate-600 focus:outline-none transition shadow-inner font-mono"
                   required
                 />
                 <Link2 className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5" />
@@ -729,7 +729,7 @@ export default function UploadModal({ onClose, onUploadSuccess, initialFiles = [
             </div>
 
             {/* Basic Options */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
               <div>
                 <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
                   Standard-Kategorie
@@ -815,10 +815,10 @@ export default function UploadModal({ onClose, onUploadSuccess, initialFiles = [
           </form>
         ) : (
         /* TAB 1: LOCAL FILE UPLOADER */
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
+        <form onSubmit={handleSubmit} className="min-h-0 flex-1 overflow-y-auto p-3 grid grid-cols-1 sm:grid-cols-2 content-start gap-x-3 gap-y-3">
           
           {error && (
-            <div className="p-3.5 rounded-xl bg-red-950/80 border border-red-800 text-red-200 text-xs flex items-center gap-2">
+            <div className="sm:col-span-2 p-3.5 rounded-xl bg-red-950/80 border border-red-800 text-red-200 text-xs flex items-center gap-2">
               <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
               <span>{error}</span>
             </div>
@@ -848,21 +848,21 @@ export default function UploadModal({ onClose, onUploadSuccess, initialFiles = [
                   setError(`Ordner konnte nicht gelesen werden: ${dropError.message}`);
                 }
               }}
-              className="border-2 border-dashed border-cyan-500/40 hover:border-cyan-400 rounded-2xl p-8 sm:p-10 flex flex-col items-center justify-center cursor-pointer bg-slate-950/60 hover:bg-slate-950/80 transition-all text-center group shadow-inner"
+              className="sm:col-start-1 sm:row-start-1 border-2 border-dashed border-cyan-500/40 hover:border-cyan-400 rounded-2xl p-5 sm:p-6 flex flex-col items-center justify-center cursor-pointer bg-slate-950/60 hover:bg-slate-950/80 transition-all text-center group shadow-inner"
             >
-              <div className="w-14 h-14 rounded-2xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                <UploadCloud className="w-7 h-7" />
+              <div className="w-11 h-11 rounded-2xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                <UploadCloud className="w-6 h-6" />
               </div>
-              <p className="text-base font-bold text-slate-100 group-hover:text-cyan-300 transition-colors">
-                Klicke hier oder ziehe STL- / 3MF-Dateien hinein
+              <p className="text-sm font-bold text-slate-100 group-hover:text-cyan-300 transition-colors">
+                Klicke hier oder ziehe Dateien oder ganze Ordner hinein
               </p>
               <p className="text-xs text-slate-400 mt-1 max-w-md">
-                Unterstützt STL & 3MF (inkl. Bambu Studio, OrcaSlicer, PrusaSlicer)
+                Ordner inklusive Unterordnern werden eingelesen. Mehrere Dateien können einzeln oder als Baugruppe importiert werden.
               </p>
             </div>
           ) : (
             /* 2. REPLACED BY INTERACTIVE 3D PREVIEW & FILE BAR ONCE FILES ARE SELECTED */
-            <div className="space-y-3">
+            <div className="sm:col-start-1 sm:row-start-1 space-y-2">
               
               {/* Selected File Bar */}
               <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 px-3.5 bg-slate-950/80 rounded-2xl border border-slate-800 text-xs">
@@ -898,7 +898,7 @@ export default function UploadModal({ onClose, onUploadSuccess, initialFiles = [
               </div>
 
               {/* INTERACTIVE 3D VIEWPORT */}
-              <div className="relative h-64 sm:h-72 rounded-2xl bg-slate-950 border border-cyan-500/30 overflow-hidden shadow-2xl flex flex-col group select-none touch-none">
+              <div className="relative h-40 rounded-2xl bg-slate-950 border border-cyan-500/30 overflow-hidden shadow-2xl flex flex-col group select-none touch-none">
                 
                 {/* 3D WebGL Canvas */}
                 <div
@@ -994,7 +994,7 @@ export default function UploadModal({ onClose, onUploadSuccess, initialFiles = [
 
           {/* Mode Switcher when multiple files are selected */}
           {files.length > 1 && (
-            <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-2xl space-y-2">
+            <div className="sm:col-start-1 sm:row-start-2 p-2.5 bg-slate-950/80 border border-slate-800 rounded-2xl space-y-1.5">
               <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
                 Import-Modus für {files.length} Dateien:
               </div>
@@ -1034,7 +1034,7 @@ export default function UploadModal({ onClose, onUploadSuccess, initialFiles = [
           )}
 
           {/* Simple Form Fields */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="sm:col-start-2 sm:row-start-1 grid grid-cols-1 sm:grid-cols-2 gap-3 content-start">
             
             {/* Title only needed for single or assembly mode */}
             {uploadMode !== 'batch' && (
@@ -1091,7 +1091,7 @@ export default function UploadModal({ onClose, onUploadSuccess, initialFiles = [
             </div>
 
             {/* Multicolor Purge Waste Toggle */}
-            <div className="sm:col-span-2 p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 flex items-center justify-between">
+            <div className="sm:col-span-2 p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <Palette className="w-4 h-4 text-amber-400 shrink-0" />
                 <div>
@@ -1122,11 +1122,11 @@ export default function UploadModal({ onClose, onUploadSuccess, initialFiles = [
           </div>
 
           {/* Collapsible Advanced Print Parameters Accordion (COLLAPSED BY DEFAULT) */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-950/40 overflow-hidden">
+          <div className="sm:col-span-2 rounded-2xl border border-slate-800 bg-slate-950/40 overflow-hidden">
             <button
               type="button"
               onClick={() => setShowAdvanced(!showAdvanced)}
-              className="w-full px-4 py-3 flex items-center justify-between text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-900/60 transition"
+              className="w-full px-4 py-2 flex items-center justify-between text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-900/60 transition"
             >
               <span className="flex items-center gap-2">
                 <Palette className="w-4 h-4 text-cyan-400" />
@@ -1136,8 +1136,8 @@ export default function UploadModal({ onClose, onUploadSuccess, initialFiles = [
             </button>
 
             {showAdvanced && (
-              <div className="p-4 pt-2 border-t border-slate-800/80 space-y-4 animate-in fade-in duration-150">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="p-3 pt-2 border-t border-slate-800/80 space-y-3 animate-in fade-in duration-150">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   
                   <div>
                     <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
@@ -1220,7 +1220,7 @@ export default function UploadModal({ onClose, onUploadSuccess, initialFiles = [
                     </div>
                   </div>
 
-                  <div className="sm:col-span-2">
+                  <div className="sm:col-span-2 lg:col-span-3">
                     <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
                       Notizen & Druckhinweise
                     </label>
@@ -1240,7 +1240,7 @@ export default function UploadModal({ onClose, onUploadSuccess, initialFiles = [
 
           {/* Upload Progress Bar */}
           {uploading && (
-            <div className="p-4 rounded-2xl bg-cyan-950/60 border border-cyan-800/80 space-y-2">
+            <div className="sm:col-span-2 p-4 rounded-2xl bg-cyan-950/60 border border-cyan-800/80 space-y-2">
               <div className="flex items-center justify-between text-xs font-semibold text-cyan-200">
                 <span className="flex items-center gap-2">
                   <div className="w-3.5 h-3.5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
@@ -1258,7 +1258,7 @@ export default function UploadModal({ onClose, onUploadSuccess, initialFiles = [
           )}
 
           {/* Submit Footer */}
-          <div className="pt-3 border-t border-slate-800 flex items-center justify-end gap-3">
+          <div className="sm:col-span-2 pt-3 border-t border-slate-800 flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={onClose}
@@ -1291,4 +1291,3 @@ export default function UploadModal({ onClose, onUploadSuccess, initialFiles = [
     </div>
   );
 }
-

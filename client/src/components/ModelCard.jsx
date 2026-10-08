@@ -116,7 +116,7 @@ export default function ModelCard({
         onClick={handleCardClick}
       >
         <div className="w-16 h-16 shrink-0 bg-slate-900 rounded-lg overflow-hidden relative">
-          <img src={`/api/models/${model.id}/thumbnail`} alt={model.title} className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; }} />
+          <img src={dynamicThumb || `/api/models/${model.id}/thumbnail`} alt={model.title} className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; }} />
           {model.source_url && <div className="absolute top-1 right-1 bg-black/60 rounded px-1"><Globe className="w-2.5 h-2.5 text-white" /></div>}
         </div>
         <div className="flex-1 min-w-0">

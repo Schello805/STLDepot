@@ -159,8 +159,8 @@ export default function App() {
   const fetchMetadata = useCallback(async () => {
     try {
       const [catRes, tagRes] = await Promise.all([
-        fetch('/api/models/categories'),
-        fetch('/api/models/tags')
+        fetch('/api/models/categories', { cache: 'no-store' }),
+        fetch('/api/models/tags', { cache: 'no-store' })
       ]);
       const catData = await catRes.json();
       const tagData = await tagRes.json();
@@ -221,7 +221,7 @@ export default function App() {
       if (onlyFavorites) params.append('favorite', 'true');
       if (sortBy) params.append('sort', sortBy);
 
-      const res = await fetch(`/api/models?${params.toString()}`);
+      const res = await fetch(`/api/models?${params.toString()}`, { cache: 'no-store' });
       const data = await res.json();
       if (data.success) {
         setModels(data.data);
