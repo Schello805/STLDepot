@@ -179,6 +179,37 @@ router.get('/tags', (req, res) => {
   }
 });
 
+// GET /api/models/filter-options - List available dynamic filters
+router.get('/filter-options', (req, res) => {
+  try {
+    const filaments = db.prepare(`SELECT DISTINCT UPPER(filament_type) as filament FROM projects WHERE filament_type IS NOT NULL AND filament_type != '' ORDER BY filament ASC`).all().map(r => r.filament);
+    const printTimes = db.prepare(`
+      SELECT DISTINCT 
+        CASE 
+          WHEN print_time_minutes > 0 AND print_time_minutes <= 120 THEN 'short' 
+          WHEN print_time_minutes > 120 AND print_time_minutes <= 360 THEN 'medium' 
+          WHEN print_time_minutes > 360 THEN 'long' 
+        END as print_time 
+      FROM projects 
+      WHERE print_time_minutes > 0
+    `).all().map(r => r.print_time).filter(Boolean);
+    const multicolors = db.prepare(`SELECT DISTINCT is_multicolor FROM projects`).all().map(r => r.is_multicolor === 1 ? 'Ja' : 'Nein');
+    const supports = db.prepare(`SELECT DISTINCT supports_needed FROM projects`).all().map(r => r.supports_needed === 1 ? 'Ja' : 'Nein');
+
+    res.json({ 
+      success: true, 
+      data: {
+        filaments,
+        printTimes,
+        multicolors,
+        supports
+      } 
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // GET /api/models/:id - Get project detail
 router.get('/:id', (req, res) => {
   try {

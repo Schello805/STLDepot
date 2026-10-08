@@ -46,6 +46,7 @@ export default function Navbar({
   setSelectedSupports,
   onHome,
   tags = [],
+  filterOptions = { filaments: [], printTimes: [], multicolors: [], supports: [] },
   selectedTag = '',
   setSelectedTag = () => {},
   selectionMode = false,
@@ -296,7 +297,7 @@ export default function Navbar({
 
             {/* Desktop: Inline filter dropdowns */}
             {/* Filament / Material Filter */}
-            {setSelectedFilament && (
+            {setSelectedFilament && filterOptions.filaments.length > 0 && (
               <select
                 value={selectedFilament}
                 onChange={(e) => setSelectedFilament(e.target.value)}
@@ -304,16 +305,14 @@ export default function Navbar({
                 title="Nach Filament-Material filtern"
               >
                 <option value="Alle">Material: Alle</option>
-                <option value="PLA">PLA</option>
-                <option value="PETG">PETG</option>
-                <option value="ABS">ABS</option>
-                <option value="ASA">ASA</option>
-                <option value="TPU">TPU / Flex</option>
+                {filterOptions.filaments.map(f => (
+                  <option key={f} value={f}>{f}</option>
+                ))}
               </select>
             )}
 
             {/* Print Time Filter */}
-            {setSelectedPrintTime && (
+            {setSelectedPrintTime && filterOptions.printTimes.length > 0 && (
               <select
                 value={selectedPrintTime}
                 onChange={(e) => setSelectedPrintTime(e.target.value)}
@@ -321,14 +320,14 @@ export default function Navbar({
                 title="Nach geschätzter Druckzeit filtern"
               >
                 <option value="Alle">Druckzeit: Alle</option>
-                <option value="short">&lt; 2 Std. (Schnell)</option>
-                <option value="medium">2 – 6 Std. (Mittel)</option>
-                <option value="long">&gt; 6 Std. (Groß)</option>
+                {filterOptions.printTimes.includes('short') && <option value="short">&lt; 2 Std. (Schnell)</option>}
+                {filterOptions.printTimes.includes('medium') && <option value="medium">2 – 6 Std. (Mittel)</option>}
+                {filterOptions.printTimes.includes('long') && <option value="long">&gt; 6 Std. (Groß)</option>}
               </select>
             )}
 
             {/* Multicolor Filter */}
-            {setSelectedMulticolor && (
+            {setSelectedMulticolor && filterOptions.multicolors.length > 0 && (
               <select
                 value={selectedMulticolor}
                 onChange={(e) => setSelectedMulticolor(e.target.value)}
@@ -336,13 +335,14 @@ export default function Navbar({
                 title="Nach Mehrfarbigkeit filtern"
               >
                 <option value="Alle">Mehrfarbig: Alle</option>
-                <option value="Ja">Ja</option>
-                <option value="Nein">Nein</option>
+                {filterOptions.multicolors.map(m => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
               </select>
             )}
 
             {/* Supports Filter */}
-            {setSelectedSupports && (
+            {setSelectedSupports && filterOptions.supports.length > 0 && (
               <select
                 value={selectedSupports}
                 onChange={(e) => setSelectedSupports(e.target.value)}
@@ -350,8 +350,9 @@ export default function Navbar({
                 title="Nach Stützstruktur filtern"
               >
                 <option value="Alle">Stützen: Alle</option>
-                <option value="Ja">Ja</option>
-                <option value="Nein">Nein</option>
+                {filterOptions.supports.map(s => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
               </select>
             )}
 
@@ -433,52 +434,52 @@ export default function Navbar({
               </button>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              {setSelectedFilament && (
+              {setSelectedFilament && filterOptions.filaments.length > 0 && (
                 <select
                   value={selectedFilament}
                   onChange={(e) => setSelectedFilament(e.target.value)}
                   className="bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-cyan-500 transition cursor-pointer"
                 >
                   <option value="Alle">Material: Alle</option>
-                  <option value="PLA">PLA</option>
-                  <option value="PETG">PETG</option>
-                  <option value="ABS">ABS</option>
-                  <option value="ASA">ASA</option>
-                  <option value="TPU">TPU / Flex</option>
+                  {filterOptions.filaments.map(f => (
+                    <option key={f} value={f}>{f}</option>
+                  ))}
                 </select>
               )}
-              {setSelectedPrintTime && (
+              {setSelectedPrintTime && filterOptions.printTimes.length > 0 && (
                 <select
                   value={selectedPrintTime}
                   onChange={(e) => setSelectedPrintTime(e.target.value)}
                   className="bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-cyan-500 transition cursor-pointer"
                 >
                   <option value="Alle">Druckzeit: Alle</option>
-                  <option value="short">&lt; 2 Std.</option>
-                  <option value="medium">2 – 6 Std.</option>
-                  <option value="long">&gt; 6 Std.</option>
+                  {filterOptions.printTimes.includes('short') && <option value="short">&lt; 2 Std.</option>}
+                  {filterOptions.printTimes.includes('medium') && <option value="medium">2 – 6 Std.</option>}
+                  {filterOptions.printTimes.includes('long') && <option value="long">&gt; 6 Std.</option>}
                 </select>
               )}
-              {setSelectedMulticolor && (
+              {setSelectedMulticolor && filterOptions.multicolors.length > 0 && (
                 <select
                   value={selectedMulticolor}
                   onChange={(e) => setSelectedMulticolor(e.target.value)}
                   className="bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-cyan-500 transition cursor-pointer"
                 >
                   <option value="Alle">Mehrfarbig: Alle</option>
-                  <option value="Ja">Ja</option>
-                  <option value="Nein">Nein</option>
+                  {filterOptions.multicolors.map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
                 </select>
               )}
-              {setSelectedSupports && (
+              {setSelectedSupports && filterOptions.supports.length > 0 && (
                 <select
                   value={selectedSupports}
                   onChange={(e) => setSelectedSupports(e.target.value)}
                   className="bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-cyan-500 transition cursor-pointer"
                 >
                   <option value="Alle">Stützen: Alle</option>
-                  <option value="Ja">Ja</option>
-                  <option value="Nein">Nein</option>
+                  {filterOptions.supports.map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
                 </select>
               )}
             </div>

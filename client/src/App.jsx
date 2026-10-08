@@ -56,6 +56,7 @@ export default function App() {
   const [models, setModels] = useState([]);
   const [categories, setCategories] = useState([]);
   const [tags, setTags] = useState([]);
+  const [filterOptions, setFilterOptions] = useState({ filaments: [], printTimes: [], multicolors: [], supports: [] });
   const [systemInfo, setSystemInfo] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -157,17 +158,20 @@ export default function App() {
     }
   }, []);
 
-  // Fetch Categories & Tags
+  // Fetch Categories, Tags & Dynamic Filters
   const fetchMetadata = useCallback(async () => {
     try {
-      const [catRes, tagRes] = await Promise.all([
+      const [catRes, tagRes, filterRes] = await Promise.all([
         fetch('/api/models/categories', { cache: 'no-store' }),
-        fetch('/api/models/tags', { cache: 'no-store' })
+        fetch('/api/models/tags', { cache: 'no-store' }),
+        fetch('/api/models/filter-options', { cache: 'no-store' })
       ]);
       const catData = await catRes.json();
       const tagData = await tagRes.json();
+      const filterData = await filterRes.json();
       if (catData.success) setCategories(catData.data);
       if (tagData.success) setTags(tagData.data);
+      if (filterData.success) setFilterOptions(filterData.data);
     } catch (err) {
       console.error('Failed to fetch metadata:', err);
     }
@@ -791,6 +795,7 @@ export default function App() {
         setSelectedSupports={setSelectedSupports}
         onHome={handleGoHome}
         tags={tags}
+        filterOptions={filterOptions}
         selectedTag={selectedTag}
         setSelectedTag={setSelectedTag}
         selectionMode={selectionMode}
