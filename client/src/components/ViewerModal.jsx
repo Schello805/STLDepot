@@ -83,12 +83,48 @@ export default function ViewerModal({
   } : model;
   const costInfo = calculateModelCost(modelWithStats, materialSettings);
 
-  // Handle saving new thumbnail from current geometry
+  // Handle saving new thumbnail from current viewport (what the user actually sees)
   const handleCaptureThumbnail = async () => {
     if (!currentGeometry) return;
     setSavingThumb(true);
     try {
-      const dataUrl = await generateThumbnailSnapshot(currentGeometry, model.filament_color || '#38bdf8', 600, 450);
+      let dataUrl = null;
+      const canvas = document.querySelector('canvas');
+      
+      if (canvas) {
+        // Capture the actual viewport as they arranged it
+        const originalDataUrl = canvas.toDataURL('image/png');
+        
+        // Scale it down to max 600x600 to save space
+        const img = new Image();
+        await new Promise(resolve => {
+          img.onload = resolve;
+          img.src = originalDataUrl;
+        });
+        
+        const maxDim = 600;
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          const ratio = Math.min(maxDim / width, maxDim / height);
+          width = Math.floor(width * ratio);
+          height = Math.floor(height * ratio);
+        }
+        
+        const offscreen = document.createElement('canvas');
+        offscreen.width = width;
+        offscreen.height = height;
+        const ctx = offscreen.getContext('2d');
+        // Add a dark background like the viewer
+        ctx.fillStyle = '#020617'; // slate-950
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        dataUrl = offscreen.toDataURL('image/png');
+      } else {
+        // Fallback if no canvas found for some reason
+        dataUrl = await generateThumbnailSnapshot(currentGeometry, model.filament_color || '#38bdf8', 600, 450);
+      }
+
       if (dataUrl) {
         const res = await fetch(`/api/models/${model.id}`, {
           method: 'PUT',
