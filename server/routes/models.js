@@ -3,6 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
+import { execFileSync } from 'child_process';
 import { ZipArchive } from 'archiver';
 import { db, MODELS_DIR, THUMBNAILS_DIR } from '../db.js';
 import { updateProjectGeometry } from '../utils/geometryCalculator.js';
@@ -1175,7 +1176,6 @@ router.post('/open-in-slicer', (req, res) => {
       return res.status(404).json({ success: false, error: 'Datei nicht auf dem Server gefunden' });
     }
 
-    const { execSync } = require('child_process');
     const platform = process.platform;
     let opened = false;
 
@@ -1191,7 +1191,7 @@ router.post('/open-in-slicer', (req, res) => {
       const candidates = macApps[slicer] || [];
       for (const app of candidates) {
         try {
-          execSync(`open -a "${app}" "${file.file_path}"`, { timeout: 5000, stdio: 'ignore' });
+          execFileSync('open', ['-a', app, file.file_path], { timeout: 5000, stdio: 'ignore' });
           opened = true;
           break;
         } catch {}
@@ -1200,19 +1200,19 @@ router.post('/open-in-slicer', (req, res) => {
       // If specific app not found, try acnext protocol for anycubic
       if (!opened && slicer === 'anycubic') {
         try {
-          execSync(`open "acnext://open?file=${encodeURIComponent(file.file_path)}"`, { timeout: 5000, stdio: 'ignore' });
+          execFileSync('open', [`acnext://open?file=${encodeURIComponent(file.file_path)}`], { timeout: 5000, stdio: 'ignore' });
           opened = true;
         } catch {}
       }
     } else if (platform === 'win32') {
       try {
-        execSync(`explorer "${file.file_path.replace(/\//g, '\\')}"`, { timeout: 5000, stdio: 'ignore' });
+        execFileSync('explorer', [file.file_path.replace(/\//g, '\\')], { timeout: 5000, stdio: 'ignore' });
         opened = true;
       } catch {}
     } else {
       // Linux
       try {
-        execSync(`xdg-open "${file.file_path}"`, { timeout: 5000, stdio: 'ignore' });
+        execFileSync('xdg-open', [file.file_path], { timeout: 5000, stdio: 'ignore' });
         opened = true;
       } catch {}
     }
