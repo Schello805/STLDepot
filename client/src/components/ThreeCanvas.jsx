@@ -45,6 +45,7 @@ export default function ThreeCanvas({
   previewIndex = 0,
   initialColor = '#38bdf8', 
   onGeometryLoaded, 
+  onCanvasReady,
   interactive = true,
   height = '400px'
 }) {
@@ -100,6 +101,7 @@ export default function ThreeCanvas({
 
     // Scene
     const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x1e293b);
     sceneRef.current = scene;
 
     // Measure helper group
@@ -123,6 +125,7 @@ export default function ThreeCanvas({
     container.innerHTML = '';
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
+    onCanvasReady?.(renderer.domElement);
 
     // Lights
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
@@ -146,7 +149,8 @@ export default function ThreeCanvas({
     const gridSize = 250;
     const gridDivisions = 25;
     const grid = new THREE.GridHelper(gridSize, gridDivisions, 0x06b6d4, 0x334155);
-    grid.position.y = 0;
+    grid.rotation.x = Math.PI / 2;
+    grid.position.z = 0;
     grid.visible = false;
     scene.add(grid);
     gridRef.current = grid;
@@ -160,8 +164,7 @@ export default function ThreeCanvas({
       side: THREE.DoubleSide 
     });
     const bedMesh = new THREE.Mesh(bedGeo, bedMat);
-    bedMesh.rotation.x = Math.PI / 2;
-    bedMesh.position.y = -0.1;
+    bedMesh.position.z = -0.1;
     bedMesh.visible = false;
     scene.add(bedMesh);
     bedMeshRef.current = bedMesh;
@@ -172,7 +175,7 @@ export default function ThreeCanvas({
       animationFrameRef.current = requestAnimationFrame(animate);
 
       if (autoRotate && meshRef.current) {
-        meshRef.current.rotation.y += 0.01;
+        meshRef.current.rotation.z += 0.01;
       }
 
       renderer.render(scene, camera);
@@ -201,8 +204,9 @@ export default function ThreeCanvas({
           gl?.getExtension('WEBGL_lose_context')?.loseContext();
         } catch (e) {}
       }
+      onCanvasReady?.(null);
     };
-  }, []);
+  }, [onCanvasReady]);
 
   // Load Model File
   useEffect(() => {
@@ -268,7 +272,7 @@ export default function ThreeCanvas({
         const maxDim = Math.max(size.x, size.y, size.z, 20);
         const dist = maxDim * 2.2;
         
-        targetLookAtRef.current.set(0, size.y / 2, 0);
+        targetLookAtRef.current.set(0, 0, size.z / 2);
         if (cameraRef.current) {
           cameraRef.current.position.set(dist * 0.9, dist * 0.8, dist * 1.1);
           cameraRef.current.lookAt(targetLookAtRef.current);
@@ -433,13 +437,13 @@ export default function ThreeCanvas({
 
     switch (view) {
       case 'top':
-        cameraRef.current.position.set(0, dist * 1.5, 0.001);
+        cameraRef.current.position.set(0, 0, dist * 1.5);
         break;
       case 'front':
-        cameraRef.current.position.set(0, center.y, dist * 1.5);
+        cameraRef.current.position.set(0, -dist * 1.5, center.z);
         break;
       case 'right':
-        cameraRef.current.position.set(dist * 1.5, center.y, 0);
+        cameraRef.current.position.set(dist * 1.5, 0, center.z);
         break;
       case 'iso':
       default:
@@ -480,16 +484,16 @@ export default function ThreeCanvas({
       const offset = cameraRef.current.position.clone().sub(targetLookAtRef.current);
       
       let radius = offset.length();
-      let theta = Math.atan2(offset.x, offset.z);
-      let phi = Math.acos(Math.max(-1, Math.min(1, offset.y / radius)));
+      let theta = Math.atan2(offset.y, offset.x);
+      let phi = Math.acos(Math.max(-1, Math.min(1, offset.z / radius)));
 
       theta -= deltaX * rotSpeed;
       phi -= deltaY * rotSpeed;
       phi = Math.max(0.05, Math.min(Math.PI - 0.05, phi));
 
-      offset.x = radius * Math.sin(phi) * Math.sin(theta);
-      offset.y = radius * Math.cos(phi);
-      offset.z = radius * Math.sin(phi) * Math.cos(theta);
+      offset.x = radius * Math.sin(phi) * Math.cos(theta);
+      offset.y = radius * Math.sin(phi) * Math.sin(theta);
+      offset.z = radius * Math.cos(phi);
 
       cameraRef.current.position.copy(targetLookAtRef.current).add(offset);
       cameraRef.current.lookAt(targetLookAtRef.current);
@@ -536,16 +540,16 @@ export default function ThreeCanvas({
       const rotSpeed = 0.01;
       const offset = cameraRef.current.position.clone().sub(targetLookAtRef.current);
       let radius = offset.length();
-      let theta = Math.atan2(offset.x, offset.z);
-      let phi = Math.acos(Math.max(-1, Math.min(1, offset.y / radius)));
+      let theta = Math.atan2(offset.y, offset.x);
+      let phi = Math.acos(Math.max(-1, Math.min(1, offset.z / radius)));
 
       theta -= deltaX * rotSpeed;
       phi -= deltaY * rotSpeed;
       phi = Math.max(0.05, Math.min(Math.PI - 0.05, phi));
 
-      offset.x = radius * Math.sin(phi) * Math.sin(theta);
-      offset.y = radius * Math.cos(phi);
-      offset.z = radius * Math.sin(phi) * Math.cos(theta);
+      offset.x = radius * Math.sin(phi) * Math.cos(theta);
+      offset.y = radius * Math.sin(phi) * Math.sin(theta);
+      offset.z = radius * Math.cos(phi);
 
       cameraRef.current.position.copy(targetLookAtRef.current).add(offset);
       cameraRef.current.lookAt(targetLookAtRef.current);

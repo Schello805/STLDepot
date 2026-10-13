@@ -559,7 +559,7 @@ export function analyzeGeometry(geometry) {
 }
 
 /**
- * Center geometry and place directly on the build bed (Z=0 / Y=0 depending on orientation)
+ * Center geometry and place directly on the build bed (Z=0).
  */
 export function centerAndAlignGeometry(geometry) {
   geometry.computeBoundingBox();
@@ -567,8 +567,8 @@ export function centerAndAlignGeometry(geometry) {
   const center = new THREE.Vector3();
   box.getCenter(center);
 
-  // Center X and Y, and set min Z to 0 so it sits on the print plate
-  geometry.translate(-center.x, -box.min.y, -center.z);
+  // STL and 3MF use Z as the vertical axis: center X/Y and place the base at Z=0.
+  geometry.translate(-center.x, -center.y, -box.min.z);
   geometry.computeBoundingBox();
   return geometry;
 }
@@ -626,6 +626,7 @@ export function generateThumbnailSnapshot(geometry, color = '#38bdf8', width = 4
         const { renderer, canvas } = getSharedSnapshotRenderer(width, height);
 
         const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1e293b);
         const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
 
         const geomClone = geometry.clone();
@@ -662,7 +663,7 @@ export function generateThumbnailSnapshot(geometry, color = '#38bdf8', width = 4
         // Camera position
         const distance = maxDim * 2.2;
         camera.position.set(distance * 0.9, distance * 0.8, distance * 1.1);
-        camera.lookAt(0, size.y / 2, 0);
+        camera.lookAt(0, 0, size.z / 2);
 
         renderer.clear();
         renderer.render(scene, camera);

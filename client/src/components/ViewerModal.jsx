@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ThreeCanvas from './ThreeCanvas';
 import LabelModal from './LabelModal';
 import { 
@@ -53,6 +53,11 @@ export default function ViewerModal({
   const [savingThumb, setSavingThumb] = useState(false);
   const [thumbSavedSuccess, setThumbSavedSuccess] = useState(false);
   const [showLabelModal, setShowLabelModal] = useState(false);
+  const viewerCanvasRef = useRef(null);
+
+  const handleCanvasReady = useCallback((canvas) => {
+    viewerCanvasRef.current = canvas;
+  }, []);
 
   useEffect(() => {
     if (modelFiles.length > 0 && !selectedFile) {
@@ -89,7 +94,7 @@ export default function ViewerModal({
     setSavingThumb(true);
     try {
       let dataUrl = null;
-      const canvas = document.querySelector('canvas');
+      const canvas = viewerCanvasRef.current;
       
       if (canvas) {
         // Capture the actual viewport as they arranged it
@@ -133,8 +138,10 @@ export default function ViewerModal({
         });
         if (res.ok) {
           setThumbSavedSuccess(true);
-          if (onModelUpdated) onModelUpdated();
+          await onModelUpdated?.();
           setTimeout(() => setThumbSavedSuccess(false), 2500);
+        } else {
+          throw new Error('Der Server konnte das Vorschaubild nicht speichern.');
         }
       }
     } catch (e) {
@@ -302,6 +309,7 @@ export default function ViewerModal({
                   previewIndex={previewIndex}
                   initialColor={model.filament_color || '#38bdf8'}
                   height="100%"
+                  onCanvasReady={handleCanvasReady}
                   onGeometryLoaded={(stats, geom) => {
                     setMeshStats(stats);
                     setCurrentGeometry(geom);

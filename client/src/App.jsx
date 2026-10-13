@@ -1039,11 +1039,7 @@ export default function App() {
               setActiveEditModel(m);
             }}
             onToggleFavorite={handleToggleFavorite}
-            onModelUpdated={() => {
-              fetchModels();
-              fetchMetadata();
-              fetchSystemInfo();
-            }}
+            onModelUpdated={() => Promise.all([fetchModels(), fetchMetadata(), fetchSystemInfo()])}
             materialSettings={materialSettings}
             onOpenSettings={() => setIsSettingsOpen(true)}
           />

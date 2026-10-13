@@ -164,6 +164,7 @@ export default function UploadModal({ onClose, onUploadSuccess, initialFiles = [
     const height = container.clientHeight || 260;
 
     const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x1e293b);
     sceneRef.current = scene;
 
     const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 2000);
@@ -193,7 +194,8 @@ export default function UploadModal({ onClose, onUploadSuccess, initialFiles = [
 
     // Bed Grid (hidden by default)
     const grid = new THREE.GridHelper(220, 22, 0x06b6d4, 0x334155);
-    grid.position.y = 0;
+    grid.rotation.x = Math.PI / 2;
+    grid.position.z = 0;
     grid.visible = false;
     scene.add(grid);
     gridRef.current = grid;
@@ -201,7 +203,7 @@ export default function UploadModal({ onClose, onUploadSuccess, initialFiles = [
     const animate = () => {
       animFrameRef.current = requestAnimationFrame(animate);
       if (autoRotate && meshRef.current) {
-        meshRef.current.rotation.y += 0.012;
+        meshRef.current.rotation.z += 0.012;
       }
       renderer.render(scene, camera);
     };
@@ -280,7 +282,7 @@ export default function UploadModal({ onClose, onUploadSuccess, initialFiles = [
         bbox.getSize(size);
         const maxDim = Math.max(size.x, size.y, size.z, 20);
         const dist = maxDim * 2.2;
-        targetLookAtRef.current.set(0, size.y / 2, 0);
+        targetLookAtRef.current.set(0, 0, size.z / 2);
 
         if (cameraRef.current) {
           cameraRef.current.position.set(dist * 0.9, dist * 0.8, dist * 1.1);
@@ -370,16 +372,16 @@ export default function UploadModal({ onClose, onUploadSuccess, initialFiles = [
       const rotSpeed = 0.008;
       const offset = cameraRef.current.position.clone().sub(targetLookAtRef.current);
       let radius = offset.length();
-      let theta = Math.atan2(offset.x, offset.z);
-      let phi = Math.acos(Math.max(-1, Math.min(1, offset.y / radius)));
+      let theta = Math.atan2(offset.y, offset.x);
+      let phi = Math.acos(Math.max(-1, Math.min(1, offset.z / radius)));
 
       theta -= deltaX * rotSpeed;
       phi -= deltaY * rotSpeed;
       phi = Math.max(0.05, Math.min(Math.PI - 0.05, phi));
 
-      offset.x = radius * Math.sin(phi) * Math.sin(theta);
-      offset.y = radius * Math.cos(phi);
-      offset.z = radius * Math.sin(phi) * Math.cos(theta);
+      offset.x = radius * Math.sin(phi) * Math.cos(theta);
+      offset.y = radius * Math.sin(phi) * Math.sin(theta);
+      offset.z = radius * Math.cos(phi);
 
       cameraRef.current.position.copy(targetLookAtRef.current).add(offset);
       cameraRef.current.lookAt(targetLookAtRef.current);
@@ -423,16 +425,16 @@ export default function UploadModal({ onClose, onUploadSuccess, initialFiles = [
       const rotSpeed = 0.01;
       const offset = cameraRef.current.position.clone().sub(targetLookAtRef.current);
       let radius = offset.length();
-      let theta = Math.atan2(offset.x, offset.z);
-      let phi = Math.acos(Math.max(-1, Math.min(1, offset.y / radius)));
+      let theta = Math.atan2(offset.y, offset.x);
+      let phi = Math.acos(Math.max(-1, Math.min(1, offset.z / radius)));
 
       theta -= deltaX * rotSpeed;
       phi -= deltaY * rotSpeed;
       phi = Math.max(0.05, Math.min(Math.PI - 0.05, phi));
 
-      offset.x = radius * Math.sin(phi) * Math.sin(theta);
-      offset.y = radius * Math.cos(phi);
-      offset.z = radius * Math.sin(phi) * Math.cos(theta);
+      offset.x = radius * Math.sin(phi) * Math.cos(theta);
+      offset.y = radius * Math.sin(phi) * Math.sin(theta);
+      offset.z = radius * Math.cos(phi);
 
       cameraRef.current.position.copy(targetLookAtRef.current).add(offset);
       cameraRef.current.lookAt(targetLookAtRef.current);
@@ -468,10 +470,10 @@ export default function UploadModal({ onClose, onUploadSuccess, initialFiles = [
 
     switch (view) {
       case 'top':
-        cameraRef.current.position.set(0, dist * 1.5, 0.001);
+        cameraRef.current.position.set(0, 0, dist * 1.5);
         break;
       case 'front':
-        cameraRef.current.position.set(0, center.y, dist * 1.5);
+        cameraRef.current.position.set(0, -dist * 1.5, center.z);
         break;
       case 'iso':
       default:
