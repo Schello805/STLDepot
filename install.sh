@@ -168,52 +168,7 @@ $SUDO_CMD systemctl restart stldepot.service
 
 # 10. CLI-Kurzbefehl 'stldepot' erstellen
 CLI_PATH="/usr/local/bin/stldepot"
-$SUDO_CMD bash -c "cat > ${CLI_PATH}" << 'EOF'
-#!/bin/bash
-SUDO_BIN=""
-if [ "$(id -u)" -ne 0 ]; then
-  if command -v sudo >/dev/null 2>&1; then
-    SUDO_BIN="sudo"
-  else
-    echo "Fehler: sudo ist nicht installiert und Befehl wird nicht als root ausgeführt."
-    exit 1
-  fi
-fi
-
-case "$1" in
-  update)
-    if [ -f /opt/stldepot/update.sh ]; then
-      bash /opt/stldepot/update.sh
-    else
-      echo "Aktualisiere STLDepot..."
-      cd /opt/stldepot
-      if ! git diff --quiet || ! git diff --cached --quiet; then
-        echo "Lokale Änderungen gefunden. Update abgebrochen, damit nichts überschrieben wird."
-        exit 1
-      fi
-      git pull --ff-only origin main
-      npm ci
-      npm ci --prefix client
-      npm run build --prefix client
-      $SUDO_BIN systemctl restart stldepot
-      echo "Aktualisierung abgeschlossen!"
-    fi
-    ;;
-  restart)
-    $SUDO_BIN systemctl restart stldepot
-    ;;
-  status)
-    $SUDO_BIN systemctl status stldepot
-    ;;
-  logs)
-    $SUDO_BIN journalctl -u stldepot -f
-    ;;
-  *)
-    echo "Verwendung: stldepot {update|restart|status|logs}"
-    ;;
-esac
-EOF
-$SUDO_CMD chmod +x "$CLI_PATH"
+$SUDO_CMD install -m 0755 "$INSTALL_DIR/scripts/stldepot-cli" "$CLI_PATH"
 
 # 11. Dienst und HTTP-Endpunkte prüfen
 echo -e "${CYAN}➜ Prüfe Dienst, API und Frontend...${NC}"

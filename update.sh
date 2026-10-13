@@ -80,6 +80,20 @@ else
   echo -e "${GREEN}✓ Quellcode aktualisiert: ${OLD_COMMIT} ➜ ${NEW_COMMIT}${NC}"
 fi
 
+# Den CLI-Wrapper direkt nach dem Pull erneuern. Damit werden auch alte
+# Installationen repariert, deren Wrapper noch bedingungslos `sudo` aufruft.
+if [ -f "$TARGET_DIR/scripts/stldepot-cli" ]; then
+  if [ "${EUID:-$(id -u)}" -eq 0 ]; then
+    install -m 0755 "$TARGET_DIR/scripts/stldepot-cli" /usr/local/bin/stldepot
+  elif command -v sudo >/dev/null 2>&1; then
+    sudo install -m 0755 "$TARGET_DIR/scripts/stldepot-cli" /usr/local/bin/stldepot
+  elif [ -w /usr/local/bin ]; then
+    install -m 0755 "$TARGET_DIR/scripts/stldepot-cli" /usr/local/bin/stldepot
+  else
+    echo -e "${YELLOW}⚠️ CLI konnte ohne root-Rechte nicht aktualisiert werden.${NC}"
+  fi
+fi
+
 # 5. Node.js & npm Abhängigkeiten installieren
 echo -e "${CYAN}➜ 2/4: Aktualisiere Backend- und Frontend-Abhängigkeiten...${NC}"
 if [ -f "package-lock.json" ]; then
@@ -136,56 +150,6 @@ fi
 if [ "$RESTARTED" = false ]; then
   echo -e "${YELLOW}ℹ Kein aktiver Hintergrunddienst (systemd/docker) erkannt.${NC}"
   echo -e "${YELLOW}  Falls du den Server manuell im Terminal betreibst, starte ihn jetzt neu mit: npm start${NC}"
-fi
-
-# 8. CLI-Befehl /usr/local/bin/stldepot aktualisieren
-if [ -w "/usr/local/bin" ] || [ "${EUID:-1}" -eq 0 ]; then
-  cat > /usr/local/bin/stldepot << 'EOF'
-#!/bin/bash
-SUDO_BIN=""
-if [ "$(id -u)" -ne 0 ]; then
-  if command -v sudo >/dev/null 2>&1; then
-    SUDO_BIN="sudo"
-  else
-    echo "Fehler: sudo ist nicht installiert und Befehl wird nicht als root ausgeführt."
-    exit 1
-  fi
-fi
-
-case "$1" in
-  update)
-    if [ -f /opt/stldepot/update.sh ]; then
-      bash /opt/stldepot/update.sh
-    else
-      echo "Aktualisiere STLDepot..."
-      cd /opt/stldepot
-      if ! git diff --quiet || ! git diff --cached --quiet; then
-        echo "Lokale Änderungen gefunden. Update abgebrochen, damit nichts überschrieben wird."
-        exit 1
-      fi
-      git pull --ff-only origin main
-      npm ci
-      npm ci --prefix client
-      npm run build --prefix client
-      $SUDO_BIN systemctl restart stldepot
-      echo "Aktualisierung abgeschlossen!"
-    fi
-    ;;
-  restart)
-    $SUDO_BIN systemctl restart stldepot
-    ;;
-  status)
-    $SUDO_BIN systemctl status stldepot
-    ;;
-  logs)
-    $SUDO_BIN journalctl -u stldepot -f
-    ;;
-  *)
-    echo "Verwendung: stldepot {update|restart|status|logs}"
-    ;;
-esac
-EOF
-  chmod +x /usr/local/bin/stldepot 2>/dev/null || true
 fi
 
 # 9. Abschlussmeldung
