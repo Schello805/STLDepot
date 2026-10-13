@@ -74,9 +74,11 @@ export default function App() {
   const BATCH_INCREMENT = 18;
   const [visibleCount, setVisibleCount] = useState(INITIAL_BATCH);
   const sentinelRef = useRef(null);
+  const latestModelsRequestRef = useRef(0);
 
   // Filter States
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Alle');
   const [selectedTag, setSelectedTag] = useState('');
   const [selectedFilament, setSelectedFilament] = useState('Alle');
@@ -168,10 +170,12 @@ export default function App() {
       ]);
       const catData = await catRes.json();
       const tagData = await tagRes.json();
-      const filterData = await filterRes.json();
+      // Servers from before the dynamic filters feature do not know this route.
+      // Categories and tags must still load normally in that case.
+      const filterData = filterRes.ok ? await filterRes.json() : null;
       if (catData.success) setCategories(catData.data);
       if (tagData.success) setTags(tagData.data);
-      if (filterData.success) setFilterOptions(filterData.data);
+      if (filterData?.success) setFilterOptions(filterData.data);
     } catch (err) {
       console.error('Failed to fetch metadata:', err);
     }
@@ -216,10 +220,11 @@ export default function App() {
 
   // Fetch Models
   const fetchModels = useCallback(async () => {
+    const requestId = ++latestModelsRequestRef.current;
     try {
       setLoading(true);
       const params = new URLSearchParams();
-      if (searchQuery) params.append('search', searchQuery);
+      if (debouncedSearchQuery) params.append('search', debouncedSearchQuery);
       if (selectedCategory && selectedCategory !== 'Alle') params.append('category', selectedCategory);
       if (selectedTag) params.append('tag', selectedTag);
       if (selectedFilament && selectedFilament !== 'Alle') params.append('filament', selectedFilament);
@@ -231,15 +236,15 @@ export default function App() {
 
       const res = await fetch(`/api/models?${params.toString()}`, { cache: 'no-store' });
       const data = await res.json();
-      if (data.success) {
+      if (data.success && requestId === latestModelsRequestRef.current) {
         setModels(data.data);
       }
     } catch (err) {
       console.error('Failed to fetch models:', err);
     } finally {
-      setLoading(false);
+      if (requestId === latestModelsRequestRef.current) setLoading(false);
     }
-  }, [searchQuery, selectedCategory, selectedTag, selectedFilament, selectedPrintTime, selectedMulticolor, selectedSupports, onlyFavorites, sortBy]);
+  }, [debouncedSearchQuery, selectedCategory, selectedTag, selectedFilament, selectedPrintTime, selectedMulticolor, selectedSupports, onlyFavorites, sortBy]);
 
   // Fetch Material Pricing Settings
   const fetchSettings = useCallback(async () => {
@@ -286,16 +291,23 @@ export default function App() {
   }, [fetchSystemInfo, fetchMetadata, fetchSettings]);
 
   useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery.trim());
+    }, 400);
+    return () => window.clearTimeout(timeout);
+  }, [searchQuery]);
+
+  useEffect(() => {
     const timeout = setTimeout(() => {
       fetchModels();
-    }, 200);
+    }, 50);
     return () => clearTimeout(timeout);
   }, [fetchModels]);
 
   // Reset lazy load counter when filters or sort change
   useEffect(() => {
     setVisibleCount(INITIAL_BATCH);
-  }, [searchQuery, selectedCategory, selectedTag, onlyFavorites, sortBy]);
+  }, [debouncedSearchQuery, selectedCategory, selectedTag, selectedFilament, selectedPrintTime, selectedMulticolor, selectedSupports, onlyFavorites, sortBy]);
 
   // Sliced models for progressive lazy loading
   const visibleModels = useMemo(() => {
