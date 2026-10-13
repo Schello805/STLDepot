@@ -153,6 +153,7 @@ export default function UploadModal({ onClose, onUploadSuccess, initialFiles = [
   ];
 
   const filamentOptions = ['PLA', 'PETG', 'ABS', 'ASA', 'TPU / Flex', 'PCTG', 'Nylon / PA', 'PC', 'Resin'];
+  const previewFile = files.find(file => /\.(stl|3mf)$/i.test(file.name));
 
   // Initialize Three.js interactive canvas in modal
   useEffect(() => {
@@ -216,6 +217,9 @@ export default function UploadModal({ onClose, onUploadSuccess, initialFiles = [
     };
     window.addEventListener('resize', handleResize);
 
+    // The canvas now exists, including when files were supplied by a global drop.
+    if (previewFile) load3DFileIntoCanvas(previewFile);
+
     return () => {
       window.removeEventListener('resize', handleResize);
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
@@ -228,7 +232,7 @@ export default function UploadModal({ onClose, onUploadSuccess, initialFiles = [
         } catch (e) {}
       }
     };
-  }, [files.length > 0]);
+  }, [previewFile, activeSourceTab]);
 
   // Load geometry into Three.js canvas
   const load3DFileIntoCanvas = async (file) => {
@@ -306,10 +310,6 @@ export default function UploadModal({ onClose, onUploadSuccess, initialFiles = [
       setTitle(formattedTitle);
     }
 
-    const first3d = validFiles.find(f => f.name.toLowerCase().endsWith('.stl') || f.name.toLowerCase().endsWith('.3mf'));
-    if (first3d) {
-      setTimeout(() => load3DFileIntoCanvas(first3d), 50);
-    }
   };
 
   // Update mesh color in real-time
